@@ -130,20 +130,9 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 	const dropdownListRef = useRef<HTMLDivElement>(null)
 
 	const providerOptions = useMemo(() => {
-		let providers = PROVIDERS.list
-		// Filter by platform
-		if (PLATFORM_CONFIG.type !== PlatformType.VSCODE) {
-			// Don't include VS Code LM API for non-VSCode platforms
-			providers = providers.filter((option) => option.value !== "vscode-lm")
-		}
-
-		// Filter by remote config if remoteConfiguredProviders is set
-		if (remoteConfigSettings?.remoteConfiguredProviders && remoteConfigSettings.remoteConfiguredProviders.length > 0) {
-			providers = providers.filter((option) => remoteConfigSettings.remoteConfiguredProviders!.includes(option.value))
-		}
-
-		return providers
-	}, [remoteConfigSettings])
+		// PromptSkill fork: only expose OpenAI-compatible provider in UI
+		return PROVIDERS.list.filter((option) => option.value === "openai")
+	}, [])
 
 	const currentProviderLabel = useMemo(() => {
 		return providerOptions.find((option) => option.value === selectedProvider)?.label || selectedProvider

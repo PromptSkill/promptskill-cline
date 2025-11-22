@@ -84,8 +84,9 @@ export function normalizeApiConfiguration(
 	apiConfiguration: ApiConfiguration | undefined,
 	currentMode: Mode,
 ): NormalizedApiConfig {
-	const provider =
-		(currentMode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider) || "anthropic"
+	// PromptSkill fork: lock provider to OpenAI-compatible backend
+	// openai equates to OpenAI-compatible, the other one (which we don't want) is openai-native
+	const provider: ApiProvider = "openai"
 
 	const modelId = currentMode === "plan" ? apiConfiguration?.planModeApiModelId : apiConfiguration?.actModeApiModelId
 

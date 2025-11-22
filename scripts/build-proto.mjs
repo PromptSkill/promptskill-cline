@@ -12,7 +12,8 @@ import { main as generateHostBridgeClient } from "./generate-host-bridge-client.
 import { main as generateProtoBusSetup } from "./generate-protobus-setup.mjs"
 
 const require = createRequire(import.meta.url)
-const PROTOC = path.join(require.resolve("grpc-tools"), "../bin/protoc")
+// PromptSkill Fork: Wrap path in quotes so Windows paths with spaces don't break
+const PROTOC = `"${path.join(path.dirname(require.resolve("grpc-tools")), "bin", "protoc")}"`;
 
 const PROTO_DIR = path.resolve("proto")
 const TS_OUT_DIR = path.resolve("src/shared/proto")
@@ -67,7 +68,7 @@ async function compileProtos() {
 		`--proto_path="${PROTO_DIR}"`,
 		`--descriptor_set_out="${descriptorFile}"`,
 		"--include_imports",
-		...protoFiles,
+		...protoFiles.map((s) => `"${s}"`) // PromptSkill Fork: Wrap path in quotes so Windows paths with spaces don't break
 	].join(" ")
 	try {
 		log_verbose(chalk.cyan("Generating descriptor set..."))
