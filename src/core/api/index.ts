@@ -44,10 +44,6 @@ import { XAIHandler } from "./providers/xai"
 import { ZAiHandler } from "./providers/zai"
 import { ApiStream, ApiStreamUsageChunk } from "./transform/stream"
 
-// PromptSkill fork: OpenAI-compatible gateway endpoint
-const PROMPTSKILL_CLINE_OPENAI_COMPATIBLE_BASE_URL =
-	process.env.PROMPTSKILL_CLINE_OPENAI_COMPATIBLE_BASE_URL ?? "https://api.promptskill.dev/api/workspace-ai-chat"
-
 export type CommonApiHandlerOptions = {
 	onRetryAttempt?: ApiConfiguration["onRetryAttempt"]
 }
