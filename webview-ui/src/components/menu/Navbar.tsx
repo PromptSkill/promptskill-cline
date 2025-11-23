@@ -16,6 +16,8 @@ const McpServerIcon = ({ className, size }: { className?: string; size?: number 
 export const Navbar = () => {
 	const { navigateToHistory, navigateToSettings, navigateToAccount, navigateToMcp, navigateToChat } = useExtensionState()
 
+	// PromptSkill Fork Notice: The actual buttons at the top of the extension are from package.json "view/title" entries
+	// Some of those have been commented out to make it harder for users to tamper with settings.
 	const SETTINGS_TABS = useMemo(
 		() => [
 			{

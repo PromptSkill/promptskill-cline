@@ -7,6 +7,7 @@ import type { ApiConfiguration } from "@shared/api"
 import type { OpenAiCompatibleModelInfo } from "@shared/api"
 import { openAiModelInfoSaneDefaults } from "@shared/api"
 
+// PromptSkill fork: hardcode settings so Cline quickly auto-configures to use our API
 const PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL
 
 const PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
