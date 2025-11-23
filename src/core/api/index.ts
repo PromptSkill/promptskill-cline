@@ -135,8 +135,7 @@ function createHandlerForProvider(
 			return new OpenAiHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				openAiApiKey: options.openAiApiKey,
-				// PromptSkill fork: ignore user-configured base URL and always use our gateway
-				openAiBaseUrl: PROMPTSKILL_CLINE_OPENAI_COMPATIBLE_BASE_URL,
+				openAiBaseUrl: options.openAiBaseUrl,
 				azureApiVersion: options.azureApiVersion,
 				openAiHeaders: options.openAiHeaders,
 				openAiModelId: mode === "plan" ? options.planModeOpenAiModelId : options.actModeOpenAiModelId,
