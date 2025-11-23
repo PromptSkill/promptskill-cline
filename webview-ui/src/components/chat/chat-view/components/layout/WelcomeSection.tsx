@@ -33,13 +33,14 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		PLATFORM_CONFIG.type === PlatformType.VSCODE &&
 		lastDismissedCliBannerVersion < CURRENT_CLI_BANNER_VERSION
 
+	// PromptSkill Fork: Disabled banners for now
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
 			<div className="overflow-y-auto flex flex-col pb-2.5">
-				{shouldShowInfoBanner && <InfoBanner />}
-				{showAnnouncement && <Announcement hideAnnouncement={hideAnnouncement} version={version} />}
+				{/* {shouldShowInfoBanner && <InfoBanner />} */}
+				{/* {showAnnouncement && <Announcement hideAnnouncement={hideAnnouncement} version={version} />} */}
 				{/* {shouldShowNewModelBanner && <NewModelBanner />} */}
-				{shouldShowCliBanner && <CliInstallBanner />}
+				{/* {shouldShowCliBanner && <CliInstallBanner />} */}
 				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
 				{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
 			</div>
