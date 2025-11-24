@@ -1,13 +1,15 @@
+import type { ApiConfiguration, OpenAiCompatibleModelInfo } from "@shared/api"
+import { openAiModelInfoSaneDefaults } from "@shared/api"
+import type { OnboardingModelGroup } from "@shared/proto/index.cline"
 import { useEffect } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurationHandlers"
-import type { OnboardingModelGroup } from "@shared/proto/index.cline"
-import type { ApiConfiguration } from "@shared/api"
-import type { OpenAiCompatibleModelInfo } from "@shared/api"
-import { openAiModelInfoSaneDefaults } from "@shared/api"
 
 // PromptSkill fork: hardcode settings so Cline quickly auto-configures to use our API
+const MODE = import.meta.env.MODE
+
+// These env vars come from webview-ui/.env.* files
 const PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL
 
 const PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
@@ -33,38 +35,56 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 
 	useEffect(() => {
+		let cancelled = false
+
 		;(async () => {
-			const updates: Partial<ApiConfiguration> = {
-				planModeApiProvider: "openai",
-				actModeApiProvider: "openai",
-
-				openAiBaseUrl: PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL,
-
-				planModeOpenAiModelId: "gpt-5-mini",
-				actModeOpenAiModelId: "gpt-5-mini",
-
-				planModeOpenAiModelInfo: PROMPTSKILL_OPENAI_MODEL_INFO,
-				actModeOpenAiModelInfo: PROMPTSKILL_OPENAI_MODEL_INFO,
-			}
-
-			// Only used in development to bypass Traefik auth, so only set if exists
-			if (PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS) {
-				updates.openAiApiKey = PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
-			}
-
-			await handleFieldsChange(updates)
-
 			try {
-				await StateServiceClient.setWelcomeViewCompleted({ value: true })
-			} catch {}
+				const updates: Partial<ApiConfiguration> = {
+					planModeApiProvider: "openai",
+					actModeApiProvider: "openai",
 
-			hideAccount()
-			hideSettings()
-			setShowWelcome(false)
+					openAiBaseUrl: PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL,
+
+					planModeOpenAiModelId: "gpt-5-mini",
+					actModeOpenAiModelId: "gpt-5-mini",
+
+					planModeOpenAiModelInfo: PROMPTSKILL_OPENAI_MODEL_INFO,
+					actModeOpenAiModelInfo: PROMPTSKILL_OPENAI_MODEL_INFO,
+				}
+
+				// Only used in development to bypass Traefik auth
+				if (MODE === "devtheia" && PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS) {
+					updates.openAiApiKey = PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
+				}
+
+				try {
+					await handleFieldsChange(updates)
+				} catch (err) {
+					console.error("[PromptSkill] Failed to apply auto API configuration:", err)
+					// you could also surface a toast here if you want
+				}
+
+				try {
+					await StateServiceClient.setWelcomeViewCompleted({ value: true })
+				} catch (err) {
+					console.warn("[PromptSkill] Failed to mark welcome as completed in backend:", err)
+				}
+			} finally {
+				if (!cancelled) {
+					// Even if config failed, don't leave the panel permanently blank.
+					hideAccount()
+					hideSettings()
+					setShowWelcome(false)
+				}
+			}
 		})()
+
+		return () => {
+			cancelled = true
+		}
 	}, [handleFieldsChange, hideAccount, hideSettings, setShowWelcome])
 
-	// 4. Don't render the onboarding UI at all
+	// We still don't render a UI – this component just runs the side effect
 	return null
 }
 

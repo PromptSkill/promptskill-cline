@@ -87,35 +87,56 @@ export class StateManager {
 
 	/**
 	 * Initialize the cache by loading data from disk
+	 * PromptSkill Fork: No longer treating failure to read state from disk as fatal
 	 */
 	public static async initialize(context: ExtensionContext): Promise<StateManager> {
 		if (!StateManager.instance) {
 			StateManager.instance = new StateManager(context)
 		}
 
+		// If we've already initialized once, just return the existing instance
 		if (StateManager.instance.isInitialized) {
-			throw new Error("StateManager has already been initialized.")
+			console.log("[StateManager] initialize called but already initialized; returning existing instance.")
+			return StateManager.instance
 		}
+
+		let step = "start"
 
 		try {
-			// Load all extension state from disk
+			step = "readGlobalStateFromDisk"
+			console.log("[StateManager] init step:", step)
 			const globalState = await readGlobalStateFromDisk(StateManager.instance.context)
+
+			// This fails with Theia, for some reason original Cline treats this as fatal, but it doesn't need to be for PromptSkill
+			step = "readSecretsFromDisk"
+			console.log("[StateManager] init step:", step)
 			const secrets = await readSecretsFromDisk(StateManager.instance.context)
+
+			step = "readWorkspaceStateFromDisk"
+			console.log("[StateManager] init step:", step)
 			const workspaceState = await readWorkspaceStateFromDisk(StateManager.instance.context)
 
-			// Populate the cache with all extension state and secrets fields
-			// Use populate method to avoid triggering persistence during initialization
+			step = "populateCache"
+			console.log("[StateManager] init step:", step)
 			StateManager.instance.populateCache(globalState, secrets, workspaceState)
 
-			// Start watcher for taskHistory.json so external edits update cache (no persist loop)
+			step = "setupTaskHistoryWatcher"
+			console.log("[StateManager] init step:", step)
 			await StateManager.instance.setupTaskHistoryWatcher()
 
-			StateManager.instance.isInitialized = true
+			console.log("[StateManager] initialize: SUCCESS")
 		} catch (error) {
-			console.error("[StateManager] Failed to initialize:", error)
-			throw error
+			// HERE is the big behavioral change: we *don’t* treat this as fatal anymore.
+			console.error(`[StateManager] initialize FAILED at step '${step}', falling back to empty in-memory state:`, error)
+
+			// Start with empty caches so the rest of the extension can still run.
+			StateManager.instance.populateCache({} as GlobalState, {} as Secrets, {} as LocalState)
+
+			// No rethrow – we accept that secrets/global state couldn't be read from disk/OS keyring.
 		}
 
+		// Either way, we now consider the state manager "initialized"
+		StateManager.instance.isInitialized = true
 		return StateManager.instance
 	}
 
