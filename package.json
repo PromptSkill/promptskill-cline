@@ -274,9 +274,9 @@
 		}
 	},
 	"scripts": {
-		"vsix:development": "npm run package-development && npx vsce package --out dist/promptskill-cline-dev.vsix",
-		"vsix:production": "npm run package-production && npx vsce package --out dist/promptskill-cline-prod.vsix",
-		"vscode:prepublish": "npm run package-production",
+		"vsix:development": "cross-env BUILD_VARIANT=development vsce package --out dist/promptskill-cline-dev.vsix",
+		"vsix:production": "cross-env BUILD_VARIANT=production  vsce package --out dist/promptskill-cline-prod.vsix",
+		"vscode:prepublish": "node scripts/promptskill-cline-vscode-prepublish.js",
 		"build:webview:development": "cd webview-ui && npm run build -- --mode development",
 		"build:webview:production": "cd webview-ui && npm run build -- --mode production",
 		"package-development": "npm run protos && npm run build:webview:development && node esbuild.mjs --production",

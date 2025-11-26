@@ -6,35 +6,36 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurationHandlers"
 
-// PromptSkill fork: hardcode settings so Cline quickly auto-configures to use our API
-const PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL
+const PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL =
+	import.meta.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL ?? ""
 
-const PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
+const PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS =
+	import.meta.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS ?? ""
 
-const MAX_COMPLETION_TOKENS = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS ?? "4000")
-const CONTEXT_WINDOW = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_CONTEXT_WINDOW ?? "120000")
+const PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS = Number(
+	import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS ?? 4000,
+)
+const PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW = Number(import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW ?? 120000)
 
-const INPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_INPUT_PRICE ?? "0.25")
+const PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE ?? 0.25)
+const PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE ?? 2)
+const PROMPTSKILL_CLINE_IS_DEV = import.meta.env.VITE_PROMPTSKILL_CLINE_IS_DEV ?? false
 
-const OUTPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_OUTPUT_PRICE ?? "2")
-
-const IS_DEV = import.meta.env.VITE_IS_DEV
-
-const PROMPTSKILL_OPENAI_MODEL_INFO: OpenAiCompatibleModelInfo = {
+const MODEL_INFO: OpenAiCompatibleModelInfo = {
 	...openAiModelInfoSaneDefaults,
-	maxTokens: MAX_COMPLETION_TOKENS,
-	contextWindow: CONTEXT_WINDOW,
-	inputPrice: INPUT_PRICE,
-	outputPrice: OUTPUT_PRICE,
+	maxTokens: PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS,
+	contextWindow: PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW,
+	inputPrice: PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE,
+	outputPrice: PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE,
 }
 
 // ✔ Required env keys for this fork to auto-configure
 const REQUIRED_ENV_KEYS = {
-	PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL,
-	MAX_COMPLETION_TOKENS,
-	CONTEXT_WINDOW,
-	INPUT_PRICE,
-	OUTPUT_PRICE,
+	PROMPTSKILL_CLINE_IS_DEV,
+	PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS,
+	PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW,
+	PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE,
+	PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE,
 }
 
 const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingModelGroup }) => {
@@ -65,18 +66,18 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 				planModeApiProvider: "openai",
 				actModeApiProvider: "openai",
 
-				openAiBaseUrl: PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL,
+				openAiBaseUrl: PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL,
 
 				planModeOpenAiModelId: "gpt-5-mini",
 				actModeOpenAiModelId: "gpt-5-mini",
 
-				planModeOpenAiModelInfo: PROMPTSKILL_OPENAI_MODEL_INFO,
-				actModeOpenAiModelInfo: PROMPTSKILL_OPENAI_MODEL_INFO,
+				planModeOpenAiModelInfo: MODEL_INFO,
+				actModeOpenAiModelInfo: MODEL_INFO,
 			}
 
 			// Only used in development to bypass Traefik auth, so only set if exists
-			if (IS_DEV && PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS) {
-				updates.openAiApiKey = PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
+			if (PROMPTSKILL_CLINE_IS_DEV && PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS) {
+				updates.openAiApiKey = PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS
 			}
 
 			try {

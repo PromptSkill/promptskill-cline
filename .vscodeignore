@@ -20,6 +20,8 @@ eslint-rules/**
 .husky/**
 .env
 .env.*
+webview-ui/.env
+webview-ui/.env.*
 
 # cli
 cli/**
