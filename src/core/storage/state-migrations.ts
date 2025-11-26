@@ -631,9 +631,9 @@ export async function migrateWelcomeViewCompleted(context: vscode.ExtensionConte
 			].some((key) => key !== undefined)
 
 			// Set welcomeViewCompleted based on whether user has keys
-			await context.globalState.update("welcomeViewCompleted", hasKey)
+			await context.globalState.update("welcomeViewCompleted", true)
 
-			console.log(`Migration: Set welcomeViewCompleted to ${hasKey} based on existing API keys`)
+			console.log(`Migration: Set welcomeViewCompleted to true`)
 		}
 	} catch (error) {
 		console.error("Failed to migrate welcomeViewCompleted:", error)

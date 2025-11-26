@@ -27,6 +27,8 @@ coverage-unit
 
 *evals.env
 .env
+.env.development
+.env.production
 
 ## Generated files ##
 src/generated/

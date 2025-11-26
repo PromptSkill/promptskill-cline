@@ -122,6 +122,26 @@ export default defineConfig({
 				// PostHog environment variables
 				TELEMETRY_SERVICE_API_KEY: JSON.stringify(process?.env?.TELEMETRY_SERVICE_API_KEY),
 				ERROR_SERVICE_API_KEY: JSON.stringify(process?.env?.ERROR_SERVICE_API_KEY),
+
+				// PromptSkill environment variables
+				PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL: JSON.stringify(
+					process?.env?.PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL
+				),
+				PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS: JSON.stringify(
+					process?.env?.PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
+				),
+				PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS: JSON.stringify(
+					process?.env?.PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS
+				),
+				PROMPTSKILL_OPENAI_CONTEXT_WINDOW: JSON.stringify(
+					process?.env?.PROMPTSKILL_OPENAI_CONTEXT_WINDOW
+				),
+				PROMPTSKILL_OPENAI_INPUT_PRICE: JSON.stringify(
+					process?.env?.PROMPTSKILL_OPENAI_INPUT_PRICE
+				),
+				PROMPTSKILL_OPENAI_OUTPUT_PRICE: JSON.stringify(
+					process?.env?.PROMPTSKILL_OPENAI_OUTPUT_PRICE
+				),
 			},
 		}),
 	},

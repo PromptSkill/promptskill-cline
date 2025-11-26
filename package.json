@@ -1,5 +1,5 @@
 {
-	"name": "claude-dev",
+	"name": "cline",
 	"displayName": "PromptSkill AI",
 	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
 	"version": "3.38.1",
@@ -11,7 +11,7 @@
 		"name": "Cline Bot Inc."
 	},
 	"license": "Apache-2.0",
-	"publisher": "saoudrizwan",
+	"publisher": "promptskill",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cline/cline"
@@ -274,7 +274,14 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run package",
+		"vsix:development": "npm run package-development && npx vsce package --out dist/promptskill-cline-dev.vsix",
+		"vsix:production": "npm run package-production && npx vsce package --out dist/promptskill-cline-prod.vsix",
+		"vscode:prepublish": "npm run package-production",
+		"build:webview:development": "cd webview-ui && npm run build -- --mode development",
+		"build:webview:production": "cd webview-ui && npm run build -- --mode production",
+		"package-development": "npm run protos && npm run build:webview:development && node esbuild.mjs --production",
+		"package-production": "npm run protos && npm run build:webview:production && node esbuild.mjs --production",
+		"package-skip-checks": "npm run protos && npm run build:webview && node esbuild.mjs --production",
 		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
 		"compile-standalone": "npm run check-types && npm run lint && node esbuild.mjs --standalone",
 		"compile-standalone-npm": "npm run protos && npm run protos-go && npm run check-types && npm run lint && node esbuild.mjs --standalone",

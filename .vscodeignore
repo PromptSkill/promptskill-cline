@@ -19,6 +19,7 @@ eslint-rules/**
 .github/**
 .husky/**
 .env
+.env.*
 
 # cli
 cli/**
