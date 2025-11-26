@@ -1,26 +1,24 @@
+import type { ApiConfiguration, OpenAiCompatibleModelInfo } from "@shared/api"
+import { openAiModelInfoSaneDefaults } from "@shared/api"
+import type { OnboardingModelGroup } from "@shared/proto/index.cline"
 import { useEffect, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurationHandlers"
-import type { OnboardingModelGroup } from "@shared/proto/index.cline"
-import type { ApiConfiguration } from "@shared/api"
-import type { OpenAiCompatibleModelInfo } from "@shared/api"
-import { openAiModelInfoSaneDefaults } from "@shared/api"
 
 // PromptSkill fork: hardcode settings so Cline quickly auto-configures to use our API
-const PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL = process.env.PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL
+const PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL
 
-const PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS = process.env.PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
+const PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS = import.meta.env.VITE_PROMPTSKILL_WORKSPACE_API_DEV_TRAEFIK_BYPASS
 
-const MAX_COMPLETION_TOKENS = Number(process.env.PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS ?? "4000")
+const MAX_COMPLETION_TOKENS = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS ?? "4000")
+const CONTEXT_WINDOW = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_CONTEXT_WINDOW ?? "120000")
 
-const CONTEXT_WINDOW = Number(process.env.PROMPTSKILL_OPENAI_CONTEXT_WINDOW ?? "120000")
+const INPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_INPUT_PRICE ?? "0.25")
 
-const INPUT_PRICE = Number(process.env.PROMPTSKILL_OPENAI_INPUT_PRICE ?? "0.25")
+const OUTPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_OPENAI_OUTPUT_PRICE ?? "2")
 
-const OUTPUT_PRICE = Number(process.env.PROMPTSKILL_OPENAI_OUTPUT_PRICE ?? "2")
-
-const IS_DEV = process.env.IS_DEV
+const IS_DEV = import.meta.env.VITE_IS_DEV
 
 const PROMPTSKILL_OPENAI_MODEL_INFO: OpenAiCompatibleModelInfo = {
 	...openAiModelInfoSaneDefaults,
@@ -33,13 +31,11 @@ const PROMPTSKILL_OPENAI_MODEL_INFO: OpenAiCompatibleModelInfo = {
 // ✔ Required env keys for this fork to auto-configure
 const REQUIRED_ENV_KEYS = {
 	PROMPTSKILL_WORKSPACE_API_AI_COMPAT_BASE_URL,
-	PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS: process.env.PROMPTSKILL_OPENAI_MAX_COMPLETION_TOKENS,
-	PROMPTSKILL_OPENAI_CONTEXT_WINDOW: process.env.PROMPTSKILL_OPENAI_CONTEXT_WINDOW,
-	PROMPTSKILL_OPENAI_INPUT_PRICE: process.env.PROMPTSKILL_OPENAI_INPUT_PRICE,
-	PROMPTSKILL_OPENAI_OUTPUT_PRICE: process.env.PROMPTSKILL_OPENAI_OUTPUT_PRICE,
+	MAX_COMPLETION_TOKENS,
+	CONTEXT_WINDOW,
+	INPUT_PRICE,
+	OUTPUT_PRICE,
 }
-
-console.log("Cline OnboardingView - Loaded env vars:", REQUIRED_ENV_KEYS)
 
 const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingModelGroup }) => {
 	const { hideSettings, hideAccount, setShowWelcome } = useExtensionState()
@@ -52,7 +48,7 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 			Object.entries(REQUIRED_ENV_KEYS)
 				.filter(([_, v]) => !v || v === "")
 				.map(([k]) => k),
-	[]
+		[],
 	)
 
 	useEffect(() => {
@@ -63,7 +59,6 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 			setInitError(msg)
 			return
 		}
-
 		// 🔄 Auto setup workflow — original logic unchanged
 		;(async () => {
 			const updates: Partial<ApiConfiguration> = {
@@ -104,10 +99,7 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 		return (
 			<div style={{ padding: 20, color: "#fff", background: "#8B0000", borderRadius: 6 }}>
 				<h3>⚠️ PromptSkill Environment Error</h3>
-				<p>
-					This environment appears misconfigured. Update your deployment settings and restart
-					the extension.
-				</p>
+				<p>This environment appears misconfigured. Update your deployment settings and restart the extension.</p>
 				<pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{initError}</pre>
 			</div>
 		)

@@ -32,7 +32,7 @@
 			"label": "watch",
 			"dependsOn": [
 				"npm: protos",
-				"npm: build:webview",
+				"npm: build:webview:development",
 				"npm: dev:webview",
 				"npm: watch:tsc",
 				"npm: watch:esbuild"
@@ -61,11 +61,11 @@
 		},
 		{
 			"type": "npm",
-			"script": "build:webview",
+			"script": "build:webview:development",
 			"group": "build",
 			"problemMatcher": [],
 			"isBackground": true,
-			"label": "npm: build:webview",
+			"label": "npm: build:webview:development",
 			"dependsOn": [
 				"npm: protos"
 			],
@@ -273,7 +273,7 @@
 			"label": "npm: storybook",
 			"dependsOn": [
 				"npm: protos",
-				"npm: build:webview"
+				"npm: build:webview:development"
 			],
 			"presentation": {
 				"reveal": "always"
