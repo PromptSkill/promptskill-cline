@@ -1747,11 +1747,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								</TooltipTrigger>
 							</Tooltip>
 
-							<ServersToggleModal />
+							{/* <ServersToggleModal /> */}
 
 							<ClineRulesToggleModal />
 
-							<ModelContainer ref={modelSelectorRef}>
+							{/* <ModelContainer ref={modelSelectorRef}>
 								<ModelButtonWrapper ref={buttonRef}>
 									<ModelDisplayButton
 										disabled={false}
@@ -1779,7 +1779,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										/>
 									</ModelSelectorTooltip>
 								)}
-							</ModelContainer>
+							</ModelContainer> */}
 						</ButtonGroup>
 					</div>
 					{/* Tooltip for Plan/Act toggle remains outside the conditional rendering */}
