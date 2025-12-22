@@ -42,6 +42,8 @@ import { telemetryService } from "./services/telemetry"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
+import { SimpleSecretStorage } from "./storage/SimpleSecretStorage"
+
 /*
 Built using https://github.com/microsoft/vscode-webview-ui-toolkit
 
@@ -54,6 +56,11 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/tree/main/framewo
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
+	// PromptSkill Fork: set up custom secret storage to avoid D BUS keyring issues
+	;(context as any).secrets = new SimpleSecretStorage(
+		context.globalStorageUri.fsPath
+	)
+
 	setupHostProvider(context)
 
 	// Initialize hook discovery cache for performance optimization
