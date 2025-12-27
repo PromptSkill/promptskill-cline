@@ -152,7 +152,13 @@ export class StateManager {
 					planModeOpenAiModelInfo: modelInfo,
 					actModeOpenAiModelInfo: modelInfo,
 
+					// If this is not configured properly then on dev environment cloudflare zero trust may block requests
 					openAiBaseUrl: process.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL,
+
+					// PromptSkill uses cookie-based workspace auth via Traefik forwardAuth.
+					// Requests from Cline would automatically include the browser cookies.
+					// Thus, no secret API key is needed here.
+					// This value is a non-secret sentinel to satisfy Cline's OpenAI client.
 					openAiApiKey: "browser_workspace_auth_sentinel",
 				})
 			} catch (e) {
@@ -513,19 +519,6 @@ export class StateManager {
 	setApiConfiguration(apiConfiguration: ApiConfiguration): void {
 		if (!this.isInitialized) {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		// PromptSkill Fork: force these so they're not overwritten to undefined
-		const existing = this.getApiConfiguration()
-
-		if (!apiConfiguration.planModeApiProvider) {
-			apiConfiguration.planModeApiProvider =
-				existing.planModeApiProvider ?? (apiConfiguration.planModeOpenAiModelId ? "openai" : undefined)
-		}
-
-		if (!apiConfiguration.actModeApiProvider) {
-			apiConfiguration.actModeApiProvider =
-				existing.actModeApiProvider ?? (apiConfiguration.actModeOpenAiModelId ? "openai" : undefined)
 		}
 
 		const {

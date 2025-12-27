@@ -2795,6 +2795,17 @@ export class Task {
 
 			try {
 				for await (const chunk of stream) {
+					// DEBUG: PROMPTSKILL CHECK FOR WHY CHUNKS MAY BE UNDEFINED
+					if (!chunk) {
+						console.warn("[Cline] stream yielded undefined chunk")
+						continue
+					}
+
+					if (typeof chunk !== "object" || !("type" in chunk)) {
+						console.warn("[Cline] stream yielded malformed chunk:", chunk)
+						continue
+					}
+
 					switch (chunk.type) {
 						case "usage":
 							this.streamHandler.setRequestId(chunk.id)
