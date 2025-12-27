@@ -9,9 +9,6 @@ import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurati
 const PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL =
 	import.meta.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL ?? ""
 
-const PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS =
-	import.meta.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS ?? ""
-
 const PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS = Number(
 	import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS ?? 4000,
 )
@@ -19,7 +16,6 @@ const PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW = Number(import.meta.env.VITE_PROM
 
 const PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE ?? 0.25)
 const PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE = Number(import.meta.env.VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE ?? 2)
-const PROMPTSKILL_CLINE_IS_DEV = import.meta.env.VITE_PROMPTSKILL_CLINE_IS_DEV ?? false
 
 const MODEL_INFO: OpenAiCompatibleModelInfo = {
 	...openAiModelInfoSaneDefaults,
@@ -31,7 +27,6 @@ const MODEL_INFO: OpenAiCompatibleModelInfo = {
 
 // ✔ Required env keys for this fork to auto-configure
 const REQUIRED_ENV_KEYS = {
-	PROMPTSKILL_CLINE_IS_DEV,
 	PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS,
 	PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW,
 	PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE,
@@ -73,11 +68,12 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 
 				planModeOpenAiModelInfo: MODEL_INFO,
 				actModeOpenAiModelInfo: MODEL_INFO,
-			}
 
-			// Only used in development to bypass Traefik auth, so only set if exists
-			if (PROMPTSKILL_CLINE_IS_DEV && PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS) {
-				updates.openAiApiKey = PROMPTSKILL_CLINE_WORKSPACE_API_DEV_TRAEFIK_BYPASS
+				// PromptSkill uses cookie-based workspace auth via Traefik forwardAuth.
+				// Requests from Cline would automatically include the browser cookies.
+				// Thus, no secret API key is needed here.
+				// This value is a non-secret sentinel to satisfy Cline's OpenAI client.
+				openAiApiKey: "browser_workspace_auth_sentinel",
 			}
 
 			try {
