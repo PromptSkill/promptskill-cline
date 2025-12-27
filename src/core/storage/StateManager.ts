@@ -132,8 +132,9 @@ export class StateManager {
 				...openAiModelInfoSaneDefaults,
 				maxTokens: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS ?? 4000),
 				contextWindow: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW ?? 120000),
-				inputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE ?? 0.25),
-				outputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE ?? 2),
+				// Don't add defaults for these, candidates dont need to see them
+				inputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE),
+				outputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE),
 			}
 
 			// This is needed otherwise error throws when using setApiConfiguration
