@@ -1,4 +1,4 @@
-import { ApiConfiguration, ModelInfo } from "@shared/api"
+import { ApiConfiguration, ModelInfo, openAiModelInfoSaneDefaults } from "@shared/api"
 import {
 	GlobalState,
 	GlobalStateAndSettings,
@@ -107,10 +107,61 @@ export class StateManager {
 			// Use populate method to avoid triggering persistence during initialization
 			StateManager.instance.populateCache(globalState, secrets, workspaceState)
 
+			const requiredEnvVars = [
+				"VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL",
+				"VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS",
+				"VITE_PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW",
+				"VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE",
+				"VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE",
+			]
+
+			const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key] || process.env[key]?.trim() === "")
+
+			if (missingEnvVars.length > 0) {
+				throw new Error(
+					`[PromptSkill] Missing required environment variables:\n` + missingEnvVars.map((k) => `- ${k}`).join("\n"),
+				)
+			}
+
+			// ---------------------------------------------------------------------
+			// PromptSkill fork: bake in authoritative API configuration
+			// ---------------------------------------------------------------------
+
+			// To inject these for local Cline testing, check .vscode/launch.json "Run Extension (Fresh Install Mode)"
+			const modelInfo = {
+				...openAiModelInfoSaneDefaults,
+				maxTokens: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS ?? 4000),
+				contextWindow: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW ?? 120000),
+				inputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE ?? 0.25),
+				outputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE ?? 2),
+			}
+
+			// This is needed otherwise error throws when using setApiConfiguration
+			StateManager.instance.isInitialized = true
+
+			try {
+				StateManager.instance.setApiConfiguration({
+					...StateManager.instance.constructApiConfigurationFromCache(),
+
+					planModeApiProvider: "openai",
+					actModeApiProvider: "openai",
+
+					planModeOpenAiModelId: "gpt-5-mini",
+					actModeOpenAiModelId: "gpt-5-mini",
+
+					planModeOpenAiModelInfo: modelInfo,
+					actModeOpenAiModelInfo: modelInfo,
+
+					openAiBaseUrl: process.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL,
+					openAiApiKey: "browser_workspace_auth_sentinel",
+				})
+			} catch (e) {
+				StateManager.instance.isInitialized = false
+				throw e
+			}
+
 			// Start watcher for taskHistory.json so external edits update cache (no persist loop)
 			await StateManager.instance.setupTaskHistoryWatcher()
-
-			StateManager.instance.isInitialized = true
 		} catch (error) {
 			console.error("[StateManager] Failed to initialize:", error)
 			throw error
@@ -462,6 +513,19 @@ export class StateManager {
 	setApiConfiguration(apiConfiguration: ApiConfiguration): void {
 		if (!this.isInitialized) {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
+		}
+
+		// PromptSkill Fork: force these so they're not overwritten to undefined
+		const existing = this.getApiConfiguration()
+
+		if (!apiConfiguration.planModeApiProvider) {
+			apiConfiguration.planModeApiProvider =
+				existing.planModeApiProvider ?? (apiConfiguration.planModeOpenAiModelId ? "openai" : undefined)
+		}
+
+		if (!apiConfiguration.actModeApiProvider) {
+			apiConfiguration.actModeApiProvider =
+				existing.actModeApiProvider ?? (apiConfiguration.actModeOpenAiModelId ? "openai" : undefined)
 		}
 
 		const {
