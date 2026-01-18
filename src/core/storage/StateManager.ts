@@ -108,11 +108,12 @@ export class StateManager {
 			StateManager.instance.populateCache(globalState, secrets, workspaceState)
 
 			const requiredEnvVars = [
-				"VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL",
-				"VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS",
-				"VITE_PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW",
-				"VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE",
-				"VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE",
+				"PROMPTSKILL_CLINE_ASSESSMENT_SESSION_ID",
+				"PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL",
+				"PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS",
+				"PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW",
+				"PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE",
+				"PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE",
 			]
 
 			const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key] || process.env[key]?.trim() === "")
@@ -130,11 +131,11 @@ export class StateManager {
 			// To inject these for local Cline testing, check .vscode/launch.json "Run Extension (Fresh Install Mode)"
 			const modelInfo = {
 				...openAiModelInfoSaneDefaults,
-				maxTokens: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS ?? 4000),
-				contextWindow: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW ?? 120000),
+				maxTokens: Number(process.env.PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS ?? 4000),
+				contextWindow: Number(process.env.PROMPTSKILL_CLINE_OPENAI_CONTEXT_WINDOW ?? 120000),
 				// Don't add defaults for these, candidates dont need to see them
-				inputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE),
-				outputPrice: Number(process.env.VITE_PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE),
+				inputPrice: Number(process.env.PROMPTSKILL_CLINE_OPENAI_INPUT_PRICE),
+				outputPrice: Number(process.env.PROMPTSKILL_CLINE_OPENAI_OUTPUT_PRICE),
 			}
 
 			// This is needed otherwise error throws when using setApiConfiguration
@@ -154,13 +155,17 @@ export class StateManager {
 					actModeOpenAiModelInfo: modelInfo,
 
 					// If this is not configured properly then on dev environment cloudflare zero trust may block requests
-					openAiBaseUrl: process.env.VITE_PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL,
+					openAiBaseUrl: process.env.PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL,
 
 					// PromptSkill uses cookie-based workspace auth via Traefik forwardAuth.
 					// Requests from Cline would automatically include the browser cookies.
 					// Thus, no secret API key is needed here.
 					// This value is a non-secret sentinel to satisfy Cline's OpenAI client.
 					openAiApiKey: "browser_workspace_auth_sentinel",
+
+					openAiHeaders: {
+						"X-Assessment-Session-Id": process.env.PROMPTSKILL_CLINE_ASSESSMENT_SESSION_ID!,
+					},
 				})
 			} catch (e) {
 				StateManager.instance.isInitialized = false
