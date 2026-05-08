@@ -17,6 +17,12 @@ import {
 } from "@shared/storage/state-keys"
 import type { StorageContext } from "@shared/storage/storage-context"
 import chokidar, { FSWatcher } from "chokidar"
+import { isPromptSkillCandidateWorkspace } from "@/integrations/promptskill/workspace"
+import {
+	promptSkillApiConfigurationFromWorkspaceEnvironment,
+	promptSkillCandidateWorkspaceEnvironmentFromProcessEnv,
+	promptSkillNativeToolCallsEnabled,
+} from "@/integrations/promptskill/workspaceEnvironment"
 import { initializeDistinctId } from "@/services/logging/distinctId"
 import { Logger } from "@/shared/services/Logger"
 import { AgentConfigLoader } from "../task/tools/subagent/AgentConfigLoader"
@@ -150,6 +156,22 @@ export class StateManager {
 			await StateManager.instance.setupTaskHistoryWatcher()
 
 			StateManager.instance.isInitialized = true
+
+			if (isPromptSkillCandidateWorkspace()) {
+				const workspaceEnvironment = promptSkillCandidateWorkspaceEnvironmentFromProcessEnv()
+
+				// PromptSkill: candidate workspaces receive authoritative AI config from backend hydration.
+				StateManager.instance.setApiConfiguration(
+					promptSkillApiConfigurationFromWorkspaceEnvironment(
+						StateManager.instance.getApiConfiguration(),
+						workspaceEnvironment,
+					),
+				)
+				StateManager.instance.setGlobalState(
+					"nativeToolCallEnabled",
+					promptSkillNativeToolCallsEnabled(workspaceEnvironment),
+				)
+			}
 
 			await AgentConfigLoader.getInstance().ready()
 		} catch (error) {

@@ -2,6 +2,7 @@ import { WebviewProvider } from "./core/webview"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import { HostProvider } from "@/hosts/host-provider"
+import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { Logger } from "@/shared/services/Logger"
 import type { StorageContext } from "@/shared/storage/storage-context"
 import { FileContextTracker } from "./core/context/context-tracking/FileContextTracker"
@@ -52,10 +53,12 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 		})
 	}
 
+	const isRunningInPromptSkillWorkspace = isPromptSkillWorkspace()
+
 	// =============== External services ===============
 	await ErrorService.initialize()
 	// Initialize PostHog client provider (skip in self-hosted mode)
-	if (!ClineEndpoint.isSelfHosted()) {
+	if (!isRunningInPromptSkillWorkspace && !ClineEndpoint.isSelfHosted()) {
 		PostHogClientProvider.getInstance()
 	}
 
@@ -64,20 +67,28 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 
 	const stateManager = StateManager.get()
 	// Non-blocking announcement check and display
-	showVersionUpdateAnnouncement(stateManager)
+	if (!isRunningInPromptSkillWorkspace) {
+		showVersionUpdateAnnouncement(stateManager)
+	}
 	// Check if this workspace was opened from worktree quick launch
-	await checkWorktreeAutoOpen(stateManager)
+	if (!isRunningInPromptSkillWorkspace) {
+		await checkWorktreeAutoOpen(stateManager)
+	}
 
 	// =============== Background sync and cleanup tasks ===============
 	// Use remote config blobStoreConfig if available, otherwise fall back to env vars
-	const blobStoreSettings = stateManager.getRemoteConfigSettings()?.blobStoreConfig ?? getBlobStoreSettingsFromEnv()
-	syncWorker().init({ ...blobStoreSettings, userDistinctId: getDistinctId() })
+	if (!isRunningInPromptSkillWorkspace) {
+		const blobStoreSettings = stateManager.getRemoteConfigSettings()?.blobStoreConfig ?? getBlobStoreSettingsFromEnv()
+		syncWorker().init({ ...blobStoreSettings, userDistinctId: getDistinctId() })
+	}
 	// Clean up old temp files in background (non-blocking) and start periodic cleanup every 24 hours
 	ClineTempManager.startPeriodicCleanup()
 	// Clean up orphaned file context warnings (startup cleanup)
 	FileContextTracker.cleanupOrphanedWarnings(stateManager)
 
-	telemetryService.captureExtensionActivated()
+	if (!isRunningInPromptSkillWorkspace) {
+		telemetryService.captureExtensionActivated()
+	}
 
 	return webview
 }

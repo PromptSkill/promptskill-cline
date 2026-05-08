@@ -18,6 +18,7 @@ import "./utils/path" // necessary to have access to String.prototype.toPosix
 import path from "node:path"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
+import { PromptSkillRuntime } from "@/integrations/promptskill/runtime"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
 import { createStorageContext } from "@/shared/storage/storage-context"
 import { readTextFromClipboard, writeTextToClipboard } from "@/utils/env"
@@ -62,6 +63,9 @@ import { fileExistsAtPath } from "./utils/fs"
 // for all-platform should be registered in common.ts.
 export async function activate(context: vscode.ExtensionContext) {
 	const activationStartTime = performance.now()
+
+	// PromptSkill: install Theia compatibility shims before Cline services touch VS Code storage APIs.
+	PromptSkillRuntime.install(context)
 
 	// 1. Set up HostProvider for VSCode
 	// IMPORTANT: This must be done before any service can be registered

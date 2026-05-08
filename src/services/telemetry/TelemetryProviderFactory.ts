@@ -1,4 +1,5 @@
 import { ClineEndpoint } from "@/config"
+import { shouldUsePromptSkillNoOpTelemetryProviders } from "@/integrations/promptskill/policy"
 import {
 	getValidOpenTelemetryConfig,
 	getValidRuntimeOpenTelemetryConfig,
@@ -104,6 +105,10 @@ export class TelemetryProviderFactory {
 	 * @returns Default configuration using available providers
 	 */
 	public static getDefaultConfigs(): TelemetryProviderConfig[] {
+		if (shouldUsePromptSkillNoOpTelemetryProviders()) {
+			return [{ type: "no-op" }]
+		}
+
 		const configs: TelemetryProviderConfig[] = []
 
 		// Skip PostHog in selfHosted mode - enterprise customers should not send telemetry to PostHog

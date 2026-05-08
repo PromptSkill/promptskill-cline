@@ -1,4 +1,5 @@
 import { ClineEndpoint } from "@/config"
+import { shouldUsePromptSkillNoOpErrorProvider } from "@/integrations/promptskill/policy"
 import { isPostHogConfigValid, PostHogClientConfig, posthogConfig } from "@/shared/services/config/posthog-config"
 import { Logger } from "@/shared/services/Logger"
 import { ClineError } from "./ClineError"
@@ -53,6 +54,13 @@ export class ErrorProviderFactory {
 	 * @returns Default configuration using PostHog, or no-op for self-hosted mode
 	 */
 	public static getDefaultConfig(): ErrorProviderConfig {
+		if (shouldUsePromptSkillNoOpErrorProvider()) {
+			return {
+				type: "no-op",
+				config: posthogConfig,
+			}
+		}
+
 		// Use no-op provider in self-hosted mode to avoid external network calls
 		if (ClineEndpoint.isSelfHosted()) {
 			return {

@@ -1,5 +1,6 @@
 import { ApiConfiguration, ModelInfo, QwenApiRegions } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { promptSkillApiProviderForMode } from "@/integrations/promptskill/policy"
 import { ClineStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import { ClineTool } from "@/shared/tools"
@@ -478,7 +479,8 @@ function createHandlerForProvider(
 export function buildApiHandler(configuration: ApiConfiguration, mode: Mode): ApiHandler {
 	const { planModeApiProvider, actModeApiProvider, ...options } = configuration
 
-	const apiProvider = mode === "plan" ? planModeApiProvider : actModeApiProvider
+	// PromptSkill: assessment workspaces must use the backend-provided OpenAI-compatible path.
+	const apiProvider = promptSkillApiProviderForMode(mode, mode === "plan" ? planModeApiProvider : actModeApiProvider)
 
 	// Validate thinking budget tokens against model's maxTokens to prevent API errors
 	// wrapped in a try-catch for safety, but this should never throw

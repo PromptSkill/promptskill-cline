@@ -26,6 +26,8 @@ import * as path from "path"
 import { ClineEnv } from "@/config"
 import type { FolderLockWithRetryResult } from "@/core/locks/types"
 import { HostProvider } from "@/hosts/host-provider"
+import { PromptSkillAssessmentHydrationWatcher } from "@/integrations/promptskill/assessmentHydrationWatcher"
+import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { ExtensionRegistryInfo } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
@@ -85,6 +87,7 @@ export class Controller {
 
 	// Timer for periodic remote config fetching
 	private remoteConfigTimer?: NodeJS.Timeout
+	private promptSkillAssessmentHydrationWatcher?: PromptSkillAssessmentHydrationWatcher
 
 	// Public getter for workspace manager with lazy initialization - To get workspaces when task isn't initialized (Used by file mentions)
 	async ensureWorkspaceManager(): Promise<WorkspaceRootManager | undefined> {
@@ -137,9 +140,15 @@ export class Controller {
 		this.accountService = ClineAccountService.getInstance()
 		BannerService.initialize(this)
 
-		this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
-			this.startRemoteConfigTimer()
-		})
+		if (isPromptSkillWorkspace()) {
+			// PromptSkill: warm workspaces hydrate candidate config after Theia has already started.
+			this.promptSkillAssessmentHydrationWatcher = new PromptSkillAssessmentHydrationWatcher(this)
+			this.promptSkillAssessmentHydrationWatcher.start()
+		} else {
+			this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
+				this.startRemoteConfigTimer()
+			})
+		}
 
 		this.mcpHub = new McpHub(
 			() => ensureMcpServersDirectoryExists(),
@@ -172,6 +181,7 @@ export class Controller {
 		}
 
 		await this.clearTask()
+		await this.promptSkillAssessmentHydrationWatcher?.dispose()
 		this.mcpHub.dispose()
 
 		Logger.error("Controller disposed")
