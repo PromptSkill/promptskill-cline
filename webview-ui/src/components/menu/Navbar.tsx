@@ -2,6 +2,7 @@ import { HistoryIcon, PlusIcon, SettingsIcon, UserCircleIcon } from "lucide-reac
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { filterPromptSkillNavigationTabs } from "@/integrations/promptskill/policy"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 
@@ -14,10 +15,11 @@ const McpServerIcon = ({ className, size }: { className?: string; size?: number 
 )
 
 export const Navbar = () => {
-	const { navigateToHistory, navigateToSettings, navigateToAccount, navigateToMcp, navigateToChat } = useExtensionState()
+	const { navigateToHistory, navigateToSettings, navigateToAccount, navigateToMcp, navigateToChat, isPromptSkillWorkspace } =
+		useExtensionState()
 
-	const SETTINGS_TABS = useMemo(
-		() => [
+	const SETTINGS_TABS = useMemo(() => {
+		const tabs = [
 			{
 				id: "chat",
 				name: "Chat",
@@ -60,9 +62,11 @@ export const Navbar = () => {
 				icon: SettingsIcon,
 				navigate: navigateToSettings,
 			},
-		],
-		[navigateToAccount, navigateToChat, navigateToHistory, navigateToMcp, navigateToSettings],
-	)
+		]
+
+		// PromptSkill: candidates should not manage MCP servers or Cline settings inside assessment workspaces.
+		return filterPromptSkillNavigationTabs(tabs, isPromptSkillWorkspace)
+	}, [navigateToAccount, navigateToChat, navigateToHistory, navigateToMcp, navigateToSettings, isPromptSkillWorkspace])
 
 	return (
 		<nav

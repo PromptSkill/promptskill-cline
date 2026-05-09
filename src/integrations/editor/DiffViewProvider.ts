@@ -22,14 +22,13 @@ export abstract class DiffViewProvider {
 	private preDiagnostics: FileDiagnostics[] = []
 	protected relPath?: string
 	protected absolutePath?: string
-	protected fileEncoding: string = "utf8"
+	protected fileEncoding = "utf8"
 	private streamedLines: string[] = []
 	private newContent?: string
 
 	constructor() {}
 
 	public async open(relPath: string, options?: { displayPath?: string }): Promise<void> {
-		this.isEditing = true
 		const cwd = await getCwd()
 		const absolutePathResolved = workspaceResolver.resolveWorkspacePath(cwd, relPath, "DiffViewProvider.open.absolutePath")
 		this.absolutePath = typeof absolutePathResolved === "string" ? absolutePathResolved : absolutePathResolved.absolutePath
@@ -58,6 +57,9 @@ export abstract class DiffViewProvider {
 		// get diagnostics before editing the file, we'll compare to diagnostics after editing to see if cline needs to fix anything
 		this.preDiagnostics = (await HostProvider.workspace.getDiagnostics({})).fileDiagnostics
 		await this.openDiffEditor()
+		// Mark editing only after the host confirms the diff is usable; otherwise a failed
+		// diff open can leave the next tool pass in a half-open state.
+		this.isEditing = true
 		await this.scrollEditorToLine(0)
 		this.streamedLines = []
 	}
@@ -158,7 +160,7 @@ export abstract class DiffViewProvider {
 	 *
 	 * @returns true if the file was saved.
 	 */
-	protected abstract saveDocument(): Promise<Boolean>
+	protected abstract saveDocument(): Promise<boolean>
 
 	/**
 	 * Closes all open diff views.

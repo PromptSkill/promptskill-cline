@@ -27,6 +27,13 @@ import { ClineEnv } from "@/config"
 import type { FolderLockWithRetryResult } from "@/core/locks/types"
 import { HostProvider } from "@/hosts/host-provider"
 import { PromptSkillAssessmentHydrationWatcher } from "@/integrations/promptskill/assessmentHydrationWatcher"
+import {
+	promptSkillAnnouncementEnabled,
+	promptSkillBanners,
+	promptSkillOnboardingModels,
+	promptSkillTelemetrySetting,
+	promptSkillWelcomeViewCompleted,
+} from "@/integrations/promptskill/policy"
 import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { ExtensionRegistryInfo } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
@@ -353,17 +360,18 @@ export class Controller {
 	}
 
 	async updateTelemetrySetting(telemetrySetting: TelemetrySetting) {
+		const nextTelemetrySetting = promptSkillTelemetrySetting(telemetrySetting)
 		// Get previous setting to detect state changes
 		const previousSetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
 		const wasOptedIn = previousSetting !== "disabled"
-		const isOptedIn = telemetrySetting !== "disabled"
+		const isOptedIn = nextTelemetrySetting !== "disabled"
 
 		// Capture opt-out event BEFORE updating (so it gets sent while telemetry is still enabled)
 		if (wasOptedIn && !isOptedIn) {
 			telemetryService.captureUserOptOut()
 		}
 
-		this.stateManager.setGlobalState("telemetrySetting", telemetrySetting)
+		this.stateManager.setGlobalState("telemetrySetting", nextTelemetrySetting)
 		telemetryService.updateTelemetryState(isOptedIn)
 
 		// Capture opt-in event AFTER updating (so telemetry is enabled to receive it)
@@ -854,7 +862,9 @@ export class Controller {
 
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// Get API configuration from cache for immediate access
-		const onboardingModels = getClineOnboardingModels()
+		// PromptSkill: assessment workspaces receive provider config from the backend, so candidates
+		// should not see Cline's consumer onboarding or provider-selection flow.
+		const onboardingModels = promptSkillOnboardingModels(getClineOnboardingModels())
 		const apiConfiguration = this.stateManager.getApiConfiguration()
 		const lastShownAnnouncementId = this.stateManager.getGlobalStateKey("lastShownAnnouncementId")
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
@@ -870,7 +880,7 @@ export class Controller {
 		const userInfo = this.stateManager.getGlobalStateKey("userInfo")
 		const mcpMarketplaceEnabled = this.stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
-		const telemetrySetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
+		const telemetrySetting = promptSkillTelemetrySetting(this.stateManager.getGlobalSettingsKey("telemetrySetting"))
 		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
 		const enableCheckpointsSetting = this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting")
 		const globalClineRulesToggles = this.stateManager.getGlobalSettingsKey("globalClineRulesToggles")
@@ -885,7 +895,9 @@ export class Controller {
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
 		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
 		// Can be undefined but is set to either true or false by the migration that runs on extension launch in extension.ts
-		const welcomeViewCompleted = !!this.stateManager.getGlobalStateKey("welcomeViewCompleted")
+		const welcomeViewCompleted = promptSkillWelcomeViewCompleted(
+			!!this.stateManager.getGlobalStateKey("welcomeViewCompleted"),
+		)
 
 		const customPrompt = this.stateManager.getGlobalSettingsKey("customPrompt")
 		const mcpResponsesCollapsed = this.stateManager.getGlobalStateKey("mcpResponsesCollapsed")
@@ -917,14 +929,16 @@ export class Controller {
 			.slice(0, 100) // for now we're only getting the latest 100 tasks, but a better solution here is to only pass in 3 for recent task history, and then get the full task history on demand when going to the task history view (maybe with pagination?)
 
 		const latestAnnouncementId = getLatestAnnouncementId()
-		const shouldShowAnnouncement = lastShownAnnouncementId !== latestAnnouncementId
+		// PromptSkill: candidate workspaces should not show upstream Cline release notes,
+		// provider upsells, or marketing banners over the assessment experience.
+		const shouldShowAnnouncement = promptSkillAnnouncementEnabled(lastShownAnnouncementId !== latestAnnouncementId)
 		const platform = process.platform as Platform
 		const distinctId = getDistinctId()
 		const version = ExtensionRegistryInfo.version
 		const clineConfig = ClineEnv.config()
 		const environment = clineConfig.environment
-		const banners = BannerService.get().getActiveBanners() ?? []
-		const welcomeBanners = BannerService.get().getWelcomeBanners() ?? []
+		const banners = promptSkillBanners(BannerService.get().getActiveBanners() ?? [])
+		const welcomeBanners = promptSkillBanners(BannerService.get().getWelcomeBanners() ?? [])
 
 		// Check OpenAI Codex authentication status
 		const { openAiCodexOAuthManager } = await import("@/integrations/openai-codex/oauth")
@@ -932,6 +946,7 @@ export class Controller {
 
 		return {
 			version,
+			isPromptSkillWorkspace: isPromptSkillWorkspace(),
 			apiConfiguration,
 			currentTaskItem,
 			clineMessages,

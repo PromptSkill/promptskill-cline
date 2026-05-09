@@ -11,6 +11,11 @@ import WelcomeView from "./components/welcome/WelcomeView"
 import WorktreesView from "./components/worktrees/WorktreesView"
 import { useClineAuth } from "./context/ClineAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
+import {
+	shouldShowClineKanbanModal,
+	shouldShowClineMcpControls,
+	shouldShowClineSettings,
+} from "./integrations/promptskill/policy"
 import { Providers } from "./Providers"
 import { StateServiceClient, UiServiceClient } from "./services/grpc-client"
 
@@ -29,6 +34,7 @@ const AppContent = () => {
 		showWorktrees,
 		showAnnouncement,
 		onboardingModels,
+		isPromptSkillWorkspace,
 		setShowAnnouncement,
 		setShouldShowAnnouncement,
 		closeMcpView,
@@ -59,12 +65,17 @@ const AppContent = () => {
 		if (!didHydrateState || showWelcome || hasShownKanbanModal) {
 			return
 		}
+		// PromptSkill: candidate workspaces should not show Cline consumer marketing modals.
+		if (!shouldShowClineKanbanModal(isPromptSkillWorkspace)) {
+			setHasShownKanbanModal(true)
+			return
+		}
 		const hasDismissedKanbanModal = dismissedBanners?.some((banner) => banner.bannerId === CLINE_KANBAN_MODAL_DISMISS_ID)
 		if (!hasDismissedKanbanModal) {
 			setShowKanbanModal(true)
 		}
 		setHasShownKanbanModal(true)
-	}, [didHydrateState, dismissedBanners, hasShownKanbanModal, showWelcome])
+	}, [didHydrateState, dismissedBanners, hasShownKanbanModal, isPromptSkillWorkspace, showWelcome])
 
 	// Keep update announcements queued until the Kanban modal has either shown and closed or been skipped.
 	useEffect(() => {
@@ -103,12 +114,16 @@ const AppContent = () => {
 		return onboardingModels ? <OnboardingView onboardingModels={onboardingModels} /> : <WelcomeView />
 	}
 
+	// PromptSkill: candidate workspaces receive locked runtime configuration from the backend.
+	const isSettingsVisible = showSettings && shouldShowClineSettings(isPromptSkillWorkspace)
+	const isMcpVisible = showMcp && shouldShowClineMcpControls(isPromptSkillWorkspace)
+
 	return (
 		<div className="flex h-screen w-full flex-col">
 			<ClineKanbanLaunchModal onClose={handleCloseKanbanModal} open={showKanbanModal} />
-			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
+			{isSettingsVisible && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
 			{showHistory && <HistoryView onDone={hideHistory} />}
-			{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
+			{isMcpVisible && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
 			{showAccount && (
 				<AccountView
 					activeOrganization={activeOrganization}
@@ -121,7 +136,7 @@ const AppContent = () => {
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
-				isHidden={showSettings || showHistory || showMcp || showAccount || showWorktrees}
+				isHidden={isSettingsVisible || showHistory || isMcpVisible || showAccount || showWorktrees}
 				showAnnouncement={showAnnouncement}
 				showHistoryView={navigateToHistory}
 			/>

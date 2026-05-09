@@ -479,7 +479,7 @@ function createHandlerForProvider(
 export function buildApiHandler(configuration: ApiConfiguration, mode: Mode): ApiHandler {
 	const { planModeApiProvider, actModeApiProvider, ...options } = configuration
 
-	// PromptSkill: assessment workspaces must use the backend-provided OpenAI-compatible path.
+	// PromptSkill: assessment workspaces must use the backend-provided OpenAI-compatible chat/completions path.
 	const apiProvider = promptSkillApiProviderForMode(mode, mode === "plan" ? planModeApiProvider : actModeApiProvider)
 
 	// Validate thinking budget tokens against model's maxTokens to prevent API errors

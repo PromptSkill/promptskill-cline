@@ -26,6 +26,11 @@ import {
 } from "../../../src/shared/api"
 import { Environment } from "../../../src/shared/config-types"
 import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
+import {
+	shouldShowClineMcpControls,
+	shouldShowClineModelFooter,
+	shouldShowClineSettings,
+} from "../integrations/promptskill/policy"
 import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "../services/grpc-client"
 
 export interface ExtensionStateContextType extends ExtensionState {
@@ -135,6 +140,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [showAccount, setShowAccount] = useState(false)
 	const [showWorktrees, setShowWorktrees] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
+	const isPromptSkillWorkspaceRef = useRef(false)
 
 	// Helper for MCP view
 	const closeMcpView = useCallback(() => {
@@ -156,6 +162,11 @@ export const ExtensionStateContextProvider: React.FC<{
 	// Navigation functions
 	const navigateToMcp = useCallback(
 		(tab?: McpViewTab) => {
+			// PromptSkill: candidate workspaces must not expose Cline MCP configuration.
+			if (!shouldShowClineMcpControls(isPromptSkillWorkspaceRef.current)) {
+				return
+			}
+
 			setShowSettings(false)
 			setShowHistory(false)
 			setShowAccount(false)
@@ -170,6 +181,11 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const navigateToSettings = useCallback(
 		(targetSection?: string) => {
+			// PromptSkill: candidate workspaces receive locked runtime configuration from the backend.
+			if (!shouldShowClineSettings(isPromptSkillWorkspaceRef.current)) {
+				return
+			}
+
 			setShowHistory(false)
 			closeMcpView()
 			setShowAccount(false)
@@ -183,6 +199,11 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const navigateToSettingsModelPicker = useCallback(
 		(opts: { targetSection?: string; initialModelTab?: "recommended" | "free" }) => {
+			// PromptSkill: the assessment runtime controls the provider and model.
+			if (!shouldShowClineModelFooter(isPromptSkillWorkspaceRef.current)) {
+				return
+			}
+
 			setShowHistory(false)
 			closeMcpView()
 			setShowAccount(false)
@@ -257,6 +278,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		maxConsecutiveMistakes: 3,
 		defaultTerminalProfile: "default",
 		isNewUser: false,
+		isPromptSkillWorkspace: false,
 		welcomeViewCompleted: false,
 		onboardingModels: undefined,
 		mcpResponsesCollapsed: false, // Default value (expanded), will be overwritten by extension state
@@ -376,6 +398,7 @@ export const ExtensionStateContextProvider: React.FC<{
 									? stateData.autoApprovalSettings
 									: prevState.autoApprovalSettings,
 							}
+							isPromptSkillWorkspaceRef.current = newState.isPromptSkillWorkspace === true
 
 							// Update welcome screen state based on API configuration if welcome view not in progress
 							if (!newState.welcomeViewCompleted && !showWelcome) {

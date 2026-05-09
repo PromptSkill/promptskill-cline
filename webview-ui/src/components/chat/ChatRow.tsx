@@ -45,6 +45,7 @@ import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { promptSkillFileActionHelperText } from "@/integrations/promptskill/policy"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
@@ -156,6 +157,7 @@ export const ChatRowContent = memo(
 			vscodeTerminalExecutionMode,
 			clineMessages,
 			showFeatureTips,
+			isPromptSkillWorkspace,
 		} = useExtensionState()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [explainChangesDisabled, setExplainChangesDisabled] = useState(false)
@@ -427,6 +429,11 @@ export const ChatRowContent = memo(
 					title={title}
 				/>
 			)
+			// PromptSkill: candidates should get explicit accept/reject guidance for proposed file changes.
+			const fileActionHelperText = promptSkillFileActionHelperText(isPromptSkillWorkspace)
+			const fileActionHelper = fileActionHelperText ? (
+				<div className="text-xs text-description -mt-2 mb-3">{fileActionHelperText}</div>
+			) : null
 
 			switch (tool.tool) {
 				case "editedExistingFile":
@@ -443,6 +450,7 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>{editToolTitle}</span>
 							</div>
+							{fileActionHelper}
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow
 									isLoading={message.partial}
@@ -470,6 +478,7 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>Cline wants to delete this file:</span>
 							</div>
+							{fileActionHelper}
 							<CodeAccordian
 								// isLoading={message.partial}
 								code={tool.content}
@@ -488,6 +497,7 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span className="font-bold">Cline wants to create a new file:</span>
 							</div>
+							{fileActionHelper}
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
 							) : (

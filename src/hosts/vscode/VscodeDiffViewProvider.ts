@@ -1,8 +1,8 @@
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
-import * as path from "path"
 import * as vscode from "vscode"
 import { DecorationController } from "@/hosts/vscode/DecorationController"
 import { NotebookDiffView } from "@/hosts/vscode/NotebookDiffView"
+import { openPromptSkillDiffEditorWithTheiaFallback } from "@/integrations/promptskill/diffEditor"
 import { Logger } from "@/shared/services/Logger"
 import { arePathsEqual } from "@/utils/path"
 
@@ -54,34 +54,12 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 				preserveFocus: true,
 			})
 		} else {
-			// Open new diff editor.
-			this.activeDiffEditor = await new Promise<vscode.TextEditor>((resolve, reject) => {
-				const fileName = path.basename(uri.fsPath)
-				const fileExists = this.editType === "modify"
-				const disposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
-					if (editor && arePathsEqual(editor.document.uri.fsPath, uri.fsPath)) {
-						disposable.dispose()
-						resolve(editor)
-					}
-				})
-				vscode.commands.executeCommand(
-					"vscode.diff",
-					vscode.Uri.parse(
-						`${DIFF_VIEW_URI_SCHEME}:${fileName.replace(/%/g, "%25").replace(/#/g, "%23").replace(/\?/g, "%3F")}`,
-					).with({
-						query: Buffer.from(this.originalContent ?? "").toString("base64"),
-					}),
-					uri,
-					`${fileName}: ${fileExists ? "Original ↔ Cline's Changes" : "New File"} (Editable)`,
-					{
-						preserveFocus: true,
-					},
-				)
-				// This may happen on very slow machines ie project idx
-				setTimeout(() => {
-					disposable.dispose()
-					reject(new Error("Failed to open diff editor, please try again..."))
-				}, 10_000)
+			// PromptSkill: keep Theia-specific diff-editor readiness handling behind the PromptSkill boundary.
+			this.activeDiffEditor = await openPromptSkillDiffEditorWithTheiaFallback({
+				uri,
+				originalContent: this.originalContent,
+				diffViewUriScheme: DIFF_VIEW_URI_SCHEME,
+				editType: this.editType,
 			})
 		}
 
@@ -190,7 +168,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 		return this.activeDiffEditor.document.getText()
 	}
 
-	protected override async saveDocument(): Promise<Boolean> {
+	protected override async saveDocument(): Promise<boolean> {
 		if (!this.activeDiffEditor) {
 			return false
 		}

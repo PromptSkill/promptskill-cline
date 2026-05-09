@@ -81,5 +81,8 @@ export function promptSkillApiConfigurationFromWorkspaceEnvironment(
 }
 
 export function promptSkillNativeToolCallsEnabled(workspaceEnvironment: PromptSkillCandidateWorkspaceEnvironment): boolean {
+	// PromptSkill keeps this off in candidate workspaces unless explicitly re-enabled:
+	// Cline's native tool path batches file edits instead of streaming them through the diff editor,
+	// which removes the real-time editing feedback candidates rely on during assessments.
 	return workspaceEnvironment.PROMPTSKILL_CLINE_NATIVE_TOOL_CALLS_ENABLED === "true"
 }

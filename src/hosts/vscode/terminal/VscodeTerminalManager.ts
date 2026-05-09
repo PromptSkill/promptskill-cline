@@ -197,10 +197,17 @@ export class VscodeTerminalManager implements ITerminalManager {
 			})
 		})
 
+		const runProcess = () => {
+			void process.run(vscodeTerminalInfo.terminal, command).catch((error) => {
+				const terminalError = error instanceof Error ? error : new Error(String(error))
+				process.emit("error", terminalError)
+			})
+		}
+
 		// if shell integration is already active, run the command immediately
 		if (vscodeTerminalInfo.terminal.shellIntegration) {
 			process.waitForShellIntegration = false
-			process.run(vscodeTerminalInfo.terminal, command)
+			runProcess()
 		} else {
 			// docs recommend waiting 3s for shell integration to activate
 			Logger.log(
@@ -224,7 +231,7 @@ export class VscodeTerminalManager implements ITerminalManager {
 					const existingProcess = this.processes.get(vscodeTerminalInfo.id)
 					if (existingProcess && existingProcess.waitForShellIntegration) {
 						existingProcess.waitForShellIntegration = false
-						existingProcess.run(vscodeTerminalInfo.terminal, command)
+						runProcess()
 					}
 				})
 		}

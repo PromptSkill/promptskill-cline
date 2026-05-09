@@ -1,6 +1,7 @@
 import chokidar, { FSWatcher } from "chokidar"
 import fs from "fs/promises"
 import type { Controller } from "@/core/controller"
+import { Logger } from "@/shared/services/Logger"
 import {
 	PROMPTSKILL_REQUIRED_HYDRATED_WORKSPACE_ENV_KEYS,
 	PromptSkillHydratedWorkspaceEnvironment,
@@ -50,7 +51,7 @@ export class PromptSkillAssessmentHydrationWatcher {
 			.on("add", () => this.queueHydrationRequest())
 			.on("change", () => this.queueHydrationRequest())
 			.on("error", (error) => {
-				console.error("[PromptSkill] Assessment hydration watcher error:", error)
+				Logger.error("[PromptSkill] Assessment hydration watcher error:", error)
 			})
 	}
 
@@ -61,7 +62,7 @@ export class PromptSkillAssessmentHydrationWatcher {
 
 	private queueHydrationRequest(): void {
 		void this.applyLatestHydrationRequest().catch((error) => {
-			console.error("[PromptSkill] Failed to apply assessment hydration config:", error)
+			Logger.error("[PromptSkill] Failed to apply assessment hydration config:", error)
 		})
 	}
 
@@ -98,7 +99,7 @@ export class PromptSkillAssessmentHydrationWatcher {
 		await fs.writeFile(ASSESSMENT_HYDRATION_CLINE_RELOAD_ACK_FILE, `${assessmentHydrationReloadToken}\n`, "utf8")
 
 		this.currentAssessmentHydrationReloadToken = assessmentHydrationReloadToken
-		console.info(`[PromptSkill] Applied assessment hydration config token=${assessmentHydrationReloadToken}`)
+		Logger.info(`[PromptSkill] Applied assessment hydration config token=${assessmentHydrationReloadToken}`)
 	}
 
 	private async readWorkspaceEnvironment(): Promise<PromptSkillHydratedWorkspaceEnvironment> {
@@ -170,7 +171,13 @@ export class PromptSkillAssessmentHydrationWatcher {
 			),
 		)
 
-		this.controller.stateManager.setGlobalState("nativeToolCallEnabled", promptSkillNativeToolCallsEnabled(workspaceEnvironment))
+		this.controller.stateManager.setGlobalState(
+			"nativeToolCallEnabled",
+			promptSkillNativeToolCallsEnabled(workspaceEnvironment),
+		)
+		// PromptSkill runs Cline inside Theia, where VSCode terminal shell integration is unreliable
+		// and can show upstream VSCode troubleshooting notices to candidates.
+		this.controller.stateManager.setGlobalState("vscodeTerminalExecutionMode", "backgroundExec")
 	}
 
 	private async readTrimmedFileOrNull(filePath: string): Promise<string | null> {

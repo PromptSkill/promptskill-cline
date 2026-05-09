@@ -1,10 +1,14 @@
 import { LightbulbIcon } from "lucide-react"
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { filterPromptSkillFeatureTips } from "@/integrations/promptskill/policy"
 import { cn } from "@/lib/utils"
 
 interface FeatureTipItem {
 	text: string
 }
+
+const MCP_FEATURE_TIP_TEXT = "Set up MCP Servers to give Cline access to external tools and APIs."
 
 const FEATURE_TIPS: FeatureTipItem[] = [
 	{
@@ -20,7 +24,7 @@ const FEATURE_TIPS: FeatureTipItem[] = [
 		text: "Use @ in the chat input to add files, folders, or URLs as context for your task.",
 	},
 	{
-		text: "Set up MCP Servers to give Cline access to external tools and APIs.",
+		text: MCP_FEATURE_TIP_TEXT,
 	},
 	{
 		text: "Cline creates checkpoints after changes — you can always restore to a previous state.",
@@ -57,6 +61,11 @@ const FADE_DURATION_MS = 300
  * Appears after a brief delay and cycles through tips while Cline is thinking.
  */
 export const FeatureTip = memo(() => {
+	const { isPromptSkillWorkspace } = useExtensionState()
+	const featureTips = useMemo(() => {
+		// PromptSkill: candidates should not be prompted to manage MCP servers inside assessment workspaces.
+		return filterPromptSkillFeatureTips(FEATURE_TIPS, MCP_FEATURE_TIP_TEXT, isPromptSkillWorkspace)
+	}, [isPromptSkillWorkspace])
 	const [isVisible, setIsVisible] = useState(false)
 	const [hasFadedIn, setHasFadedIn] = useState(false)
 	const [isFading, setIsFading] = useState(false)
@@ -65,15 +74,15 @@ export const FeatureTip = memo(() => {
 	const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-	const currentTip = FEATURE_TIPS[tipIndex]
+	const currentTip = featureTips[tipIndex % featureTips.length]
 
 	const advanceTip = useCallback(() => {
 		setIsFading(true)
 		fadeTimerRef.current = setTimeout(() => {
-			setTipIndex((prev) => (prev + 1) % FEATURE_TIPS.length)
+			setTipIndex((prev) => (prev + 1) % featureTips.length)
 			setIsFading(false)
 		}, FADE_DURATION_MS)
-	}, [])
+	}, [featureTips.length])
 
 	useEffect(() => {
 		showTimerRef.current = setTimeout(() => {

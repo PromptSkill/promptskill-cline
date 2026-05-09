@@ -1,5 +1,6 @@
 import type { ClineMessage, ClineSayTool } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
+import { promptSkillButtonConfig } from "@/integrations/promptskill/policy"
 
 /**
  * Button action types that determine the behavior
@@ -213,9 +214,17 @@ const errorTypes = ["api_req_failed", "mistake_limit_reached"]
  * Determines button configuration based on message type and state
  * This is the single source of truth used by both ActionButtons and useMessageHandlers
  */
-export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode = "act"): ButtonConfig {
+export function getButtonConfig(
+	message: ClineMessage | undefined,
+	_mode: Mode = "act",
+	isPromptSkillWorkspace?: boolean,
+): ButtonConfig {
+	// PromptSkill: candidate-facing file approval copy is adjusted by the webview policy boundary.
+	const withPromptSkillPolicy = (buttonConfig: ButtonConfig): ButtonConfig =>
+		promptSkillButtonConfig(buttonConfig, isPromptSkillWorkspace)
+
 	if (!message) {
-		return BUTTON_CONFIGS.default
+		return withPromptSkillPolicy(BUTTON_CONFIGS.default)
 	}
 
 	const isStreaming = message.partial === true
@@ -224,13 +233,13 @@ export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode =
 	// Special case: command_output should show "Proceed While Running" button even while streaming
 	// This allows terminal output to stream while still showing the action button
 	if (message.type === "ask" && message.ask === "command_output") {
-		return BUTTON_CONFIGS.command_output
+		return withPromptSkillPolicy(BUTTON_CONFIGS.command_output)
 	}
 
 	// Handle partial/streaming messages first (most common during task execution)
 	// This must be checked before any other conditions to ensure streaming state takes precedence
 	if (isStreaming && !isError) {
-		return BUTTON_CONFIGS.partial
+		return withPromptSkillPolicy(BUTTON_CONFIGS.partial)
 	}
 
 	// Handle ask messages (user interaction required)
@@ -238,9 +247,9 @@ export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode =
 		switch (message.ask) {
 			// Error recovery states
 			case "api_req_failed":
-				return BUTTON_CONFIGS.api_req_failed
+				return withPromptSkillPolicy(BUTTON_CONFIGS.api_req_failed)
 			case "mistake_limit_reached":
-				return BUTTON_CONFIGS.mistake_limit_reached
+				return withPromptSkillPolicy(BUTTON_CONFIGS.mistake_limit_reached)
 
 			// Tool approval (most common)
 			case "tool": {
@@ -248,63 +257,63 @@ export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode =
 				try {
 					const tool = JSON.parse(message.text || "{}") as ClineSayTool
 					if (tool.tool === "editedExistingFile" || tool.tool === "newFileCreated" || tool.tool === "fileDeleted") {
-						return BUTTON_CONFIGS.tool_save
+						return withPromptSkillPolicy(BUTTON_CONFIGS.tool_save)
 					}
 				} catch {
 					// Fall through to default tool approval
 				}
-				return BUTTON_CONFIGS.tool_approve
+				return withPromptSkillPolicy(BUTTON_CONFIGS.tool_approve)
 			}
 
 			// Command execution
 			case "command":
-				return BUTTON_CONFIGS.command
+				return withPromptSkillPolicy(BUTTON_CONFIGS.command)
 			case "command_output":
-				return BUTTON_CONFIGS.command_output
+				return withPromptSkillPolicy(BUTTON_CONFIGS.command_output)
 
 			// Standard approvals
 			case "followup":
-				return BUTTON_CONFIGS.followup
+				return withPromptSkillPolicy(BUTTON_CONFIGS.followup)
 			case "browser_action_launch":
-				return BUTTON_CONFIGS.browser_action_launch
+				return withPromptSkillPolicy(BUTTON_CONFIGS.browser_action_launch)
 			case "use_mcp_server":
-				return BUTTON_CONFIGS.use_mcp_server
+				return withPromptSkillPolicy(BUTTON_CONFIGS.use_mcp_server)
 			case "use_subagents":
-				return BUTTON_CONFIGS.use_subagents
+				return withPromptSkillPolicy(BUTTON_CONFIGS.use_subagents)
 			case "plan_mode_respond":
-				return BUTTON_CONFIGS.plan_mode_respond
+				return withPromptSkillPolicy(BUTTON_CONFIGS.plan_mode_respond)
 
 			// Task lifecycle
 			case "completion_result":
-				return BUTTON_CONFIGS.completion_result
+				return withPromptSkillPolicy(BUTTON_CONFIGS.completion_result)
 			case "resume_task":
-				return BUTTON_CONFIGS.resume_task
+				return withPromptSkillPolicy(BUTTON_CONFIGS.resume_task)
 			case "resume_completed_task":
-				return BUTTON_CONFIGS.resume_completed_task
+				return withPromptSkillPolicy(BUTTON_CONFIGS.resume_completed_task)
 			case "new_task":
-				return BUTTON_CONFIGS.new_task
+				return withPromptSkillPolicy(BUTTON_CONFIGS.new_task)
 
 			// Utility
 			case "condense":
-				return BUTTON_CONFIGS.condense
+				return withPromptSkillPolicy(BUTTON_CONFIGS.condense)
 			case "report_bug":
-				return BUTTON_CONFIGS.report_bug
+				return withPromptSkillPolicy(BUTTON_CONFIGS.report_bug)
 
 			default:
-				return BUTTON_CONFIGS.tool_approve
+				return withPromptSkillPolicy(BUTTON_CONFIGS.tool_approve)
 		}
 	}
 
 	// Handle say messages (typically don't require buttons except in special cases)
 	if (message.type === "say" && message.say === "api_req_started") {
-		return BUTTON_CONFIGS.api_req_active
+		return withPromptSkillPolicy(BUTTON_CONFIGS.api_req_active)
 	}
 
 	// Special case: command_output say messages should show "Proceed While Running" button
 	// This allows terminal output to stream while still showing the action button
 	if (message.type === "say" && message.say === "command_output") {
-		return BUTTON_CONFIGS.command_output
+		return withPromptSkillPolicy(BUTTON_CONFIGS.command_output)
 	}
 
-	return BUTTON_CONFIGS.partial
+	return withPromptSkillPolicy(BUTTON_CONFIGS.partial)
 }

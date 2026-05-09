@@ -8,10 +8,11 @@ import PopupModalContainer from "@/components/common/PopupModalContainer"
 import ServersToggleList from "@/components/mcp/configuration/tabs/installed/ServersToggleList"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { shouldShowClineMcpControls } from "@/integrations/promptskill/policy"
 import { McpServiceClient } from "@/services/grpc-client"
 
 const ServersToggleModal: React.FC = () => {
-	const { mcpServers, navigateToMcp, setMcpServers } = useExtensionState()
+	const { mcpServers, navigateToMcp, isPromptSkillWorkspace, setMcpServers } = useExtensionState()
 	const [isVisible, setIsVisible] = useState(false)
 	const buttonRef = useRef<HTMLDivElement>(null)
 	const modalRef = useRef<HTMLDivElement>(null)
@@ -51,6 +52,11 @@ const ServersToggleModal: React.FC = () => {
 		}
 	}, [isVisible, viewportWidth, viewportHeight])
 
+	// PromptSkill: candidates should not manage MCP servers inside assessment workspaces.
+	if (!shouldShowClineMcpControls(isPromptSkillWorkspace)) {
+		return null
+	}
+
 	return (
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
@@ -80,7 +86,7 @@ const ServersToggleModal: React.FC = () => {
 									setIsVisible(false)
 									navigateToMcp("configure")
 								}}>
-								<span className="codicon codicon-gear text-[10px]"></span>
+								<span className="codicon codicon-gear text-[10px]" />
 							</VSCodeButton>
 						</div>
 					</div>

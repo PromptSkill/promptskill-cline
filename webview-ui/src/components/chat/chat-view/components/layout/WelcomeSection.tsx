@@ -14,6 +14,7 @@ import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
 import CreateWorktreeModal from "@/components/worktrees/CreateWorktreeModal"
 import { useClineAuth } from "@/context/ClineAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { shouldShowClineMarketingBanners } from "@/integrations/promptskill/policy"
 import { AccountServiceClient, StateServiceClient, UiServiceClient, WorktreeServiceClient } from "@/services/grpc-client"
 import { convertBannerData } from "@/utils/bannerUtils"
 import { getCurrentPlatform } from "@/utils/platformUtils"
@@ -65,6 +66,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		navigateToSettingsModelPicker,
 		navigateToWorktrees,
 		worktreesEnabled,
+		isPromptSkillWorkspace,
 		banners,
 		welcomeBanners,
 	} = useExtensionState()
@@ -75,6 +77,11 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	// which are fetched asynchronously and may not be available on the first state push.
 	// The modal opens immediately if banners arrive, or after a 3s timeout as fallback.
 	useEffect(() => {
+		// PromptSkill: candidate workspaces should not show upstream Cline announcements.
+		if (!shouldShowClineMarketingBanners(isPromptSkillWorkspace)) {
+			return
+		}
+
 		if (showAnnouncement && !hasShownWhatsNewModal && !bannerWaitTimeoutRef.current) {
 			bannerWaitTimeoutRef.current = setTimeout(() => {
 				bannerWaitTimeoutRef.current = null
@@ -88,10 +95,15 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				bannerWaitTimeoutRef.current = null
 			}
 		}
-	}, [showAnnouncement, hasShownWhatsNewModal])
+	}, [showAnnouncement, hasShownWhatsNewModal, isPromptSkillWorkspace])
 
 	// Open modal early if welcome banners arrive before the timeout
 	useEffect(() => {
+		// PromptSkill: candidate workspaces should not show upstream Cline release banners.
+		if (!shouldShowClineMarketingBanners(isPromptSkillWorkspace)) {
+			return
+		}
+
 		if (bannerWaitTimeoutRef.current && welcomeBanners && welcomeBanners.length > 0) {
 			if (bannerWaitTimeoutRef.current) {
 				clearTimeout(bannerWaitTimeoutRef.current)
@@ -100,7 +112,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 			setShowWhatsNewModal(true)
 			setHasShownWhatsNewModal(true)
 		}
-	}, [welcomeBanners])
+	}, [isPromptSkillWorkspace, welcomeBanners])
 
 	const handleCloseWhatsNewModal = useCallback(() => {
 		setShowWhatsNewModal(false)
@@ -154,6 +166,11 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	 * For now, using EXAMPLE_BANNER_DATA with version-based filtering
 	 */
 	const bannerConfig = useMemo((): BannerCardData[] => {
+		// PromptSkill: candidate workspaces should not show upstream provider or feature upsells.
+		if (!shouldShowClineMarketingBanners(isPromptSkillWorkspace)) {
+			return []
+		}
+
 		// Filter banners based on version tracking and user status
 		return BANNER_DATA.filter((banner) => {
 			if (isBannerDismissed(banner.id)) {
@@ -170,7 +187,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 
 			return true
 		})
-	}, [isBannerDismissed, clineUser])
+	}, [isBannerDismissed, clineUser, isPromptSkillWorkspace])
 
 	/**
 	 * Action handler - maps action types to actual implementations
@@ -255,6 +272,11 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	 * Combines hardcoded banners (bannerConfig) with dynamic banners from extension state
 	 */
 	const activeBanners = useMemo(() => {
+		// PromptSkill: candidate workspaces should stay focused on the assessment task.
+		if (!shouldShowClineMarketingBanners(isPromptSkillWorkspace)) {
+			return []
+		}
+
 		// Start with the hardcoded banners (bannerConfig)
 		const hardcodedBanners = bannerConfig.map((banner) =>
 			convertBannerData(banner, {
@@ -273,7 +295,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 
 		// Combine both sources: extension state banners first, then hardcoded banners
 		return [...extensionStateBanners, ...hardcodedBanners]
-	}, [bannerConfig, banners, clineUser, handleBannerAction, handleBannerDismiss])
+	}, [bannerConfig, banners, clineUser, handleBannerAction, handleBannerDismiss, isPromptSkillWorkspace])
 
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
