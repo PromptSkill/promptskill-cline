@@ -2,7 +2,15 @@ import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import * as vscode from "vscode"
 import { DecorationController } from "@/hosts/vscode/DecorationController"
 import { NotebookDiffView } from "@/hosts/vscode/NotebookDiffView"
-import { openPromptSkillDiffEditorWithTheiaFallback } from "@/integrations/promptskill/diffEditor"
+import {
+	openPromptSkillDiffEditorWithTheiaFallback,
+	showPromptSkillEditableDiffDocument,
+} from "@/integrations/promptskill/diffEditor"
+import {
+	logPromptSkillApplyEditTiming,
+	logPromptSkillEditProbe,
+	nextPromptSkillEditTimingOperationId,
+} from "@/integrations/promptskill/editTiming"
 import { Logger } from "@/shared/services/Logger"
 import { arePathsEqual } from "@/utils/path"
 
@@ -50,9 +58,8 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		if (diffTab && diffTab.input instanceof vscode.TabInputTextDiff) {
 			// Use already open diff editor.
-			this.activeDiffEditor = await vscode.window.showTextDocument(diffTab.input.modified, {
-				preserveFocus: true,
-			})
+			// PromptSkill: candidate workspaces should reveal the live-edit diff while Cline streams changes.
+			this.activeDiffEditor = await showPromptSkillEditableDiffDocument(diffTab.input.modified)
 		} else {
 			// PromptSkill: keep Theia-specific diff-editor readiness handling behind the PromptSkill boundary.
 			this.activeDiffEditor = await openPromptSkillDiffEditorWithTheiaFallback({
@@ -80,34 +87,89 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		// Place cursor at the beginning of the diff editor to keep it out of the way of the stream animation
 		const beginningOfDocument = new vscode.Position(0, 0)
-		this.activeDiffEditor.selection = new vscode.Selection(beginningOfDocument, beginningOfDocument)
 
-		// Replace the text in the diff editor document.
-		const document = this.activeDiffEditor?.document
+		// Replace the text in the active diff editor document. PromptSkill uses the direct
+		// editor edit path because Theia's workspace-wide applyEdit path can stall for
+		// several seconds on the first live edit into a newly opened diff editor.
+		const document = this.activeDiffEditor.document
 		const replacingToEnd = rangeToReplace.endLine >= document.lineCount
-		const edit = new vscode.WorkspaceEdit()
 		const range = new vscode.Range(rangeToReplace.startLine, 0, rangeToReplace.endLine, 0)
-		edit.replace(document.uri, range, content)
-		await vscode.workspace.applyEdit(edit)
+		const editOperationId = nextPromptSkillEditTimingOperationId()
+		const editMetadata = {
+			editOperationId,
+			path: document.uri.fsPath,
+			contentLength: content.length,
+			startLine: rangeToReplace.startLine,
+			endLine: rangeToReplace.endLine,
+			documentLineCountBeforeEdit: document.lineCount,
+			replacingToEnd,
+		}
+
+		logPromptSkillEditProbe("before_selection", editMetadata)
+		const applyEditStartedAt = Date.now()
+		this.activeDiffEditor.selection = new vscode.Selection(beginningOfDocument, beginningOfDocument)
+		logPromptSkillEditProbe("after_selection", {
+			...editMetadata,
+			elapsedMs: Date.now() - applyEditStartedAt,
+		})
+
+		logPromptSkillEditProbe("edit_call_start", editMetadata)
+		await this.activeDiffEditor.edit((editBuilder) => {
+			logPromptSkillEditProbe("edit_callback_entered", {
+				...editMetadata,
+				elapsedMs: Date.now() - applyEditStartedAt,
+			})
+			editBuilder.replace(range, content)
+			logPromptSkillEditProbe("edit_callback_replace_returned", {
+				...editMetadata,
+				elapsedMs: Date.now() - applyEditStartedAt,
+			})
+		})
+		const applyEditDurationMs = Date.now() - applyEditStartedAt
+		logPromptSkillEditProbe("edit_call_resolved", {
+			...editMetadata,
+			documentLineCountAfterEdit: document.lineCount,
+			applyEditDurationMs,
+		})
 
 		// VS Code can normalize trailing newlines on full-document replacements.
 		// Only fix up when replacing to the end to avoid touching untouched content.
+		let trailingNewlineFixDurationMs = 0
 		if (replacingToEnd) {
 			const desiredTrailingNewlines = countTrailingNewlines(content)
 			const actualTrailingNewlines = countTrailingNewlines(document.getText())
 			const newlineDelta = desiredTrailingNewlines - actualTrailingNewlines
 
 			if (newlineDelta > 0) {
-				const fixEdit = new vscode.WorkspaceEdit()
-				fixEdit.insert(document.uri, document.lineAt(document.lineCount - 1).range.end, "\n".repeat(newlineDelta))
-				await vscode.workspace.applyEdit(fixEdit)
+				// PromptSkill: keep Theia live-diff updates on the direct editor edit path;
+				// workspace.applyEdit can delay candidate feedback here.
+				const fixStartedAt = Date.now()
+				await this.activeDiffEditor.edit((editBuilder) => {
+					editBuilder.insert(document.lineAt(document.lineCount - 1).range.end, "\n".repeat(newlineDelta))
+				})
+				trailingNewlineFixDurationMs += Date.now() - fixStartedAt
 			} else if (newlineDelta < 0) {
-				const fixEdit = new vscode.WorkspaceEdit()
+				// PromptSkill: keep Theia live-diff updates on the direct editor edit path;
+				// workspace.applyEdit can delay candidate feedback here.
 				const startLine = Math.max(0, document.lineCount + newlineDelta)
-				fixEdit.delete(document.uri, new vscode.Range(startLine, 0, document.lineCount, 0))
-				await vscode.workspace.applyEdit(fixEdit)
+				const fixStartedAt = Date.now()
+				await this.activeDiffEditor.edit((editBuilder) => {
+					editBuilder.delete(new vscode.Range(startLine, 0, document.lineCount, 0))
+				})
+				trailingNewlineFixDurationMs += Date.now() - fixStartedAt
 			}
 		}
+		logPromptSkillApplyEditTiming({
+			editOperationId,
+			path: document.uri.fsPath,
+			contentLength: content.length,
+			startLine: rangeToReplace.startLine,
+			endLine: rangeToReplace.endLine,
+			documentLineCount: document.lineCount,
+			replacingToEnd,
+			applyEditDurationMs,
+			trailingNewlineFixDurationMs,
+		})
 
 		if (currentLine !== undefined) {
 			// Update decorations for the entire changed section

@@ -3,6 +3,8 @@ import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import { ClineDefaultTool } from "@shared/tools"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
+import { promptSkillAutoApprovalSettings } from "@/integrations/promptskill/policy"
+import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { getCwd, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@/utils/path"
 
 export class AutoApprove {
@@ -40,7 +42,9 @@ export class AutoApprove {
 	// Check if the tool should be auto-approved based on the settings
 	// Returns bool for most tools, and tuple for tools with nested settings
 	shouldAutoApproveTool(toolName: ClineDefaultTool): boolean | [boolean, boolean] {
-		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
+		const inPromptSkillWorkspace = isPromptSkillWorkspace()
+
+		if (!inPromptSkillWorkspace && this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			switch (toolName) {
 				case ClineDefaultTool.FILE_READ:
 				case ClineDefaultTool.LIST_FILES:
@@ -63,7 +67,7 @@ export class AutoApprove {
 			}
 		}
 
-		if (this.stateManager.getGlobalSettingsKey("autoApproveAllToggled")) {
+		if (!inPromptSkillWorkspace && this.stateManager.getGlobalSettingsKey("autoApproveAllToggled")) {
 			switch (toolName) {
 				case ClineDefaultTool.FILE_READ:
 				case ClineDefaultTool.LIST_FILES:
@@ -85,7 +89,11 @@ export class AutoApprove {
 			}
 		}
 
-		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+		// PromptSkill hides Cline's auto-approve controls, but still permits low-risk
+		// default approvals for project reads and safe shell commands during assessments.
+		const autoApprovalSettings = promptSkillAutoApprovalSettings(
+			this.stateManager.getGlobalSettingsKey("autoApprovalSettings"),
+		)
 
 		switch (toolName) {
 			case ClineDefaultTool.FILE_READ:
@@ -123,10 +131,12 @@ export class AutoApprove {
 		blockname: ClineDefaultTool,
 		autoApproveActionpath: string | undefined,
 	): Promise<boolean> {
-		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
+		const inPromptSkillWorkspace = isPromptSkillWorkspace()
+
+		if (!inPromptSkillWorkspace && this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			return true
 		}
-		if (this.stateManager.getGlobalSettingsKey("autoApproveAllToggled")) {
+		if (!inPromptSkillWorkspace && this.stateManager.getGlobalSettingsKey("autoApproveAllToggled")) {
 			return true
 		}
 

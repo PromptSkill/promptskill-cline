@@ -29,7 +29,7 @@ const GENERIC: ClineToolSpec = {
 	id,
 	name: "write_to_file",
 	description:
-		"Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.",
+		"Request to write content to a file at the specified path. Use this for new files, or for existing files only when the change is broad enough that targeted SEARCH/REPLACE edits would be more error-prone. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.",
 	parameters: [
 		{
 			name: "path",
@@ -53,7 +53,7 @@ const NATIVE_NEXT_GEN: ClineToolSpec = {
 	id,
 	name: "write_to_file",
 	description:
-		"[IMPORTANT: Always output the absolutePath first] Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.",
+		"[IMPORTANT: Always output the absolutePath first] Request to write content to a file at the specified path. Use this for new files, or for existing files only when the change is broad enough that targeted SEARCH/REPLACE edits would be more error-prone. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.",
 	parameters: [
 		{
 			name: "absolutePath",

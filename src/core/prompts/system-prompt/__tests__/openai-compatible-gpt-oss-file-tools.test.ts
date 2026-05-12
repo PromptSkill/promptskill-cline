@@ -41,21 +41,23 @@ describe("OpenAI-compatible gpt-oss native tools smoke test", () => {
 		expect(family).to.equal(ModelFamily.NATIVE_GPT_5)
 	})
 
-	it("exposes apply_patch for gpt-oss-120b so file editing remains native", async () => {
+	it("exposes write_to_file and replace_in_file for gpt-oss-120b so candidate edits can stream", async () => {
 		const { tools } = await getSystemPrompt(makeContext("gpt-oss-120b"))
 		const toolNames = toolNamesFrom(tools)
 
 		expect(toolNames).to.include(ClineDefaultTool.BASH)
 		expect(toolNames).to.include(ClineDefaultTool.FILE_READ)
-		expect(toolNames).to.include(ClineDefaultTool.APPLY_PATCH)
-		expect(toolNames).to.not.include(ClineDefaultTool.FILE_NEW)
-		expect(toolNames).to.not.include(ClineDefaultTool.FILE_EDIT)
+		expect(toolNames).to.include(ClineDefaultTool.FILE_NEW)
+		expect(toolNames).to.include(ClineDefaultTool.FILE_EDIT)
+		expect(toolNames).to.not.include(ClineDefaultTool.APPLY_PATCH)
 	})
 
-	it("control: gpt-5-codex still receives apply_patch", async () => {
+	it("control: gpt-5-codex also receives write_to_file and replace_in_file", async () => {
 		const { tools } = await getSystemPrompt(makeContext("gpt-5-codex"))
 		const toolNames = toolNamesFrom(tools)
 
-		expect(toolNames).to.include(ClineDefaultTool.APPLY_PATCH)
+		expect(toolNames).to.include(ClineDefaultTool.FILE_NEW)
+		expect(toolNames).to.include(ClineDefaultTool.FILE_EDIT)
+		expect(toolNames).to.not.include(ClineDefaultTool.APPLY_PATCH)
 	})
 })

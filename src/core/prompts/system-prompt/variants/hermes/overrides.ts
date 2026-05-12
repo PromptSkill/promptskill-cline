@@ -85,11 +85,10 @@ Params: path, recursive (optional).
 Key: Rely on returned tool results instead of using list_files to “confirm” writes.
 
 **attempt_completion** — Final result (no questions). Use this tool only when all goals have been completed.
-Params: result, command (optional demonstration of completed work).  
+Params: result.
 *Example:*
 <attempt_completion>
 <result>Your final result description here</result>
-<command>Your command here (optional)</command>
 <task_progress>Checklist here (required if you used task_progress in previous tool uses)</task_progress>
 </attempt_completion>
 **Gate:** Ask yourself inside <reasoning> whether all prior tool uses were user-confirmed. If not, do **not** call.
@@ -130,7 +129,7 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
 1. Analyze the user's task and set clear, achievable goals to accomplish it. Use <think></think>tags while considering options, then present/execute the plan. Prioritize goals in a logical order.
 2. Work through these goals sequentially, utilizing available tools one at a time as necessary. Each goal should correspond to a distinct step in your problem-solving process. You will be informed on the work completed and what's remaining as you go.
 3. Before calling a tool, briefly analyze within <think></think> tags: review the file structure in environment_details for context, select the most relevant tool, and verify all required parameters are present or can be reasonably inferred. If a required parameter is missing, use ask_followup_question to request it rather than invoking the tool with placeholder values. Do not ask about optional parameters.
-4. Once you've completed the user's task, you must use the attempt_completion tool to present the result of the task to the user. You may also provide a CLI command to showcase the result of your task; this can be particularly useful for web development tasks, where you can run e.g. \`open index.html\` to show the website you've built. You should only use attempt_completion when you are fully done with the task and have no further steps to take.
+4. Once you've completed the user's task, you must use the attempt_completion tool to present the result of the task to the user. You should only use attempt_completion when you are fully done with the task and have no further steps to take.
 5. The user may provide feedback, which you can use to make improvements and try again. But DO NOT continue in pointless back and forth conversations, i.e. don't end your responses with questions or offers for further assistance.`
 const HERMES_TASK_PROGRESS_TEMPLATE = `UPDATING TASK PROGRESS
 

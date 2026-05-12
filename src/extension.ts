@@ -18,8 +18,11 @@ import "./utils/path" // necessary to have access to String.prototype.toPosix
 import path from "node:path"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { PromptSkillRuntime } from "@/integrations/promptskill/runtime"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
+import { resolvePromptSkillDiffContentQuery } from "@/integrations/promptskill/diffContentStore"
+import { logPromptSkillResourceSnapshot } from "@/integrations/promptskill/resourceUsage"
+import { PromptSkillRuntime } from "@/integrations/promptskill/runtime"
+import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { createStorageContext } from "@/shared/storage/storage-context"
 import { readTextFromClipboard, writeTextToClipboard } from "@/utils/env"
 import { initialize, tearDown } from "./common"
@@ -157,7 +160,35 @@ export async function activate(context: vscode.ExtensionContext) {
 	*/
 	const diffContentProvider = new (class implements vscode.TextDocumentContentProvider {
 		provideTextDocumentContent(uri: vscode.Uri): string {
-			return Buffer.from(uri.query, "base64").toString("utf-8")
+			const startedAt = Date.now()
+
+			if (isPromptSkillWorkspace()) {
+				// PromptSkill diagnostics: this marks when Theia's VS Code bridge
+				// actually enters Cline's virtual original-document provider.
+				logPromptSkillResourceSnapshot("diff_content_provider_entered", {
+					scheme: uri.scheme,
+					path: uri.path,
+					queryLength: uri.query.length,
+				})
+			}
+
+			const decodedContent =
+				resolvePromptSkillDiffContentQuery(uri.query) ?? Buffer.from(uri.query, "base64").toString("utf-8")
+
+			if (isPromptSkillWorkspace()) {
+				// PromptSkill diagnostics: diff opening in Theia can stall before or after
+				// resolving the virtual original document. Logging this boundary tells us
+				// whether `vscode.diff` reached Cline's content provider promptly.
+				logPromptSkillResourceSnapshot("diff_content_provider_resolved", {
+					scheme: uri.scheme,
+					path: uri.path,
+					queryLength: uri.query.length,
+					contentLength: decodedContent.length,
+					durationMs: Date.now() - startedAt,
+				})
+			}
+
+			return decodedContent
 		}
 	})()
 	context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(DIFF_VIEW_URI_SCHEME, diffContentProvider))

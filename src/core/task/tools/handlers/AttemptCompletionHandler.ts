@@ -6,6 +6,7 @@ import * as NotificationHook from "@core/hooks/notification-hook"
 import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
+import { promptSkillAttemptCompletionCommand } from "@integrations/promptskill/policy"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
@@ -56,7 +57,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const result: string | undefined = block.params.result
-		const command: string | undefined = block.params.command
+		// PromptSkill: candidate workspaces already manage app preview/dev server access, and post-completion
+		// commands can unnecessarily repeat verification work after the task appears done.
+		const command: string | undefined = promptSkillAttemptCompletionCommand(block.params.command)
 
 		// Validate required parameters
 		if (!result) {

@@ -10,7 +10,10 @@ import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { applyPatch } from "diff"
+import { promptSkillPartialFileEditToolMessage } from "@/integrations/promptskill/fileEditToolMessage"
+import { isPromptSkillDiagnosticLoggingEnabled, logPromptSkillResourceSnapshot } from "@/integrations/promptskill/resourceUsage"
 import { telemetryService } from "@/services/telemetry"
+import { Logger } from "@/shared/services/Logger"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -67,7 +70,9 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 					getLineNumberFromCharIndex(config.services.diffViewProvider.originalContent || "", idx),
 				),
 			}
-			const partialMessage = JSON.stringify(sharedMessageProps)
+			// PromptSkill: only strip the transient partial UI payload. The model output,
+			// parsed tool content, editor update, and final tool message stay unchanged.
+			const partialMessage = JSON.stringify(promptSkillPartialFileEditToolMessage(sharedMessageProps))
 
 			// Handle auto-approval vs manual approval for partial
 			if (await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath)) {
@@ -84,12 +89,28 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				await config.services.diffViewProvider.open(absolutePath, { displayPath: relPath })
 			}
 			// Editor is open, stream content in real-time (false = don't finalize yet)
+			const updateStartedAt = Date.now()
 			await config.services.diffViewProvider.update(newContent, false)
+			logPromptSkillEditTiming("partial_update", {
+				toolName: block.name,
+				relPath,
+				partial: block.partial,
+				rawLength: rawDiff?.length ?? rawContent?.length ?? 0,
+				newContentLength: newContent.length,
+				durationMs: Date.now() - updateStartedAt,
+			})
 		} catch (error) {
-			// Reset diff view on error
+			// Partial file-edit streaming is best-effort UI feedback. The final non-partial tool
+			// execution below is the source of truth; surfacing partial open/update races as tool
+			// failures creates a false error followed by a successful edit in candidate chat.
+			logPromptSkillEditTiming("partial_update_skipped_after_error", {
+				toolName: block.name,
+				relPath: rawRelPath,
+				partial: block.partial,
+				errorMessage: error instanceof Error ? error.message : String(error),
+			})
 			await config.services.diffViewProvider.revertChanges()
 			await config.services.diffViewProvider.reset()
-			throw error
 		}
 	}
 
@@ -180,7 +201,9 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			// in other words, you must always repeat the block.partial logic here
 			if (!config.services.diffViewProvider.isEditing) {
 				// show gui message before showing edit animation
-				const partialMessage = JSON.stringify(sharedMessageProps)
+				// PromptSkill: this is also a transient partial UI row, even though it runs from the
+				// complete tool path when Cline did not stream a partial block first.
+				const partialMessage = JSON.stringify(promptSkillPartialFileEditToolMessage(sharedMessageProps))
 				await config.callbacks.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
 				await config.services.diffViewProvider.open(absolutePath, { displayPath: relPath })
 			}
@@ -498,6 +521,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			}
 
 			try {
+				const constructStartedAt = Date.now()
 				const result = await constructNewFileContent(
 					diff,
 					config.services.diffViewProvider.originalContent || "",
@@ -505,10 +529,26 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				)
 				newContent = result.newContent
 				matchIndices = result.matchIndices
+				logPromptSkillEditTiming("construct_new_content", {
+					toolName: block.name,
+					relPath,
+					partial: block.partial,
+					diffLength: diff.length,
+					newContentLength: newContent.length,
+					matchCount: matchIndices.length,
+					durationMs: Date.now() - constructStartedAt,
+				})
 			} catch (error) {
 				// During streaming (block.partial=true), the diff may fail repeatedly as incomplete content streams in.
 				// Skip all error UI handling for partial blocks to prevent flickering.
 				if (block.partial) {
+					logPromptSkillEditTiming("construct_new_content_partial_miss", {
+						toolName: block.name,
+						relPath,
+						partial: block.partial,
+						diffLength: diff.length,
+						errorMessage: error instanceof Error ? error.message : String(error),
+					})
 					return
 				}
 
@@ -577,4 +617,19 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
 		return { relPath, absolutePath, fileExists, diff, content, newContent, workspaceContext, matchIndices }
 	}
+}
+
+function logPromptSkillEditTiming(event: string, metadata: Record<string, unknown>): void {
+	if (!isPromptSkillDiagnosticLoggingEnabled()) {
+		return
+	}
+
+	// Fast partial updates are noisy during streaming and can obscure the slow events
+	// that matter when debugging candidate live-edit feedback.
+	if (event === "partial_update" && typeof metadata.durationMs === "number" && metadata.durationMs < 250) {
+		return
+	}
+
+	Logger.info(`[PromptSkill][edit-timing] ${event} ${JSON.stringify(metadata)}`)
+	logPromptSkillResourceSnapshot(`edit_${event}`, metadata)
 }

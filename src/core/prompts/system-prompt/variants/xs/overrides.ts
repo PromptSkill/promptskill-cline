@@ -37,7 +37,7 @@ const XS_RULES = `GLOBAL RULES
 const XS_OBJECTIVES = `EXECUTION FLOW
 - Understand request → PLAN explore (read-only) → propose collaborative plan with options/risks/tests → ask if it matches → output: **Switch me to ACT MODE to implement.**
 - Prefer replace_in_file; respect final formatted state.
-- When all steps succeed and are confirmed, call attempt_completion (optional demo command).`
+- When all steps succeed and are confirmed, call attempt_completion.`
 
 const XS_TOOLS_OVERRIDE = (context: SystemPromptContext) =>
 	context.enableNativeToolCalls
@@ -86,11 +86,10 @@ Key: Don’t use to “confirm” writes; rely on returned tool results.
 </ask_followup_question>
 Key: Never include an option to toggle modes.
 
-**attempt_completion** — Final result (no questions). Params: result, command (optional demo).  
+**attempt_completion** — Final result (no questions). Params: result.
 *Example:*
 <attempt_completion>
 <result>Feature X implemented with tests and docs.</result>
-<command>npm run preview</command>
 </attempt_completion>  
 **Gate:** Ask yourself inside <thinking> whether all prior tool uses were user-confirmed. If not, do **not** call.
 

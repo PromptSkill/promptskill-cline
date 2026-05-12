@@ -8,7 +8,16 @@ interface FeatureTipItem {
 	text: string
 }
 
-const MCP_FEATURE_TIP_TEXT = "Set up MCP Servers to give Cline access to external tools and APIs."
+const PROMPTSKILL_FEATURE_TIP_TEXTS = new Set([
+	"Add a .clinerules file to your project root to give Cline project-specific instructions.",
+	"Switch to Plan Mode to discuss and plan an approach before Cline takes action.",
+	"Use @ in the chat input to add files, folders, or URLs as context for your task.",
+	"Cline creates checkpoints after changes — you can always restore to a previous state.",
+	"Use /compact to condense long conversations and free up context window space.",
+	"Use the quote button to select text from Cline's response and reference it in your reply.",
+	"You can drag and drop images into the chat to share screenshots with Cline.",
+	"Cline can browse websites — ask it to test your local dev server in the browser.",
+])
 
 const FEATURE_TIPS: FeatureTipItem[] = [
 	{
@@ -24,7 +33,7 @@ const FEATURE_TIPS: FeatureTipItem[] = [
 		text: "Use @ in the chat input to add files, folders, or URLs as context for your task.",
 	},
 	{
-		text: MCP_FEATURE_TIP_TEXT,
+		text: "Set up MCP Servers to give Cline access to external tools and APIs.",
 	},
 	{
 		text: "Cline creates checkpoints after changes — you can always restore to a previous state.",
@@ -63,8 +72,8 @@ const FADE_DURATION_MS = 300
 export const FeatureTip = memo(() => {
 	const { isPromptSkillWorkspace } = useExtensionState()
 	const featureTips = useMemo(() => {
-		// PromptSkill: candidates should not be prompted to manage MCP servers inside assessment workspaces.
-		return filterPromptSkillFeatureTips(FEATURE_TIPS, MCP_FEATURE_TIP_TEXT, isPromptSkillWorkspace)
+		// PromptSkill: keep workflow guidance, but remove settings/support/integration prompts from assessments.
+		return filterPromptSkillFeatureTips(FEATURE_TIPS, PROMPTSKILL_FEATURE_TIP_TEXTS, isPromptSkillWorkspace)
 	}, [isPromptSkillWorkspace])
 	const [isVisible, setIsVisible] = useState(false)
 	const [hasFadedIn, setHasFadedIn] = useState(false)

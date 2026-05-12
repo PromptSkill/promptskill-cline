@@ -1,6 +1,7 @@
 import chokidar, { FSWatcher } from "chokidar"
 import fs from "fs/promises"
 import type { Controller } from "@/core/controller"
+import { promptSkillAutoApprovalSettings } from "@/integrations/promptskill/policy"
 import { Logger } from "@/shared/services/Logger"
 import {
 	PROMPTSKILL_REQUIRED_HYDRATED_WORKSPACE_ENV_KEYS,
@@ -175,6 +176,17 @@ export class PromptSkillAssessmentHydrationWatcher {
 			"nativeToolCallEnabled",
 			promptSkillNativeToolCallsEnabled(workspaceEnvironment),
 		)
+		// PromptSkill needs Cline's visible diff editor path for live candidate feedback.
+		// Upstream background edits batch file updates and make changes appear all at once.
+		this.controller.stateManager.setGlobalState("backgroundEditEnabled", false)
+		// PromptSkill: hydration may run after warm workspace state has loaded, so
+		// re-assert the candidate approval policy here too.
+		this.controller.stateManager.setGlobalState(
+			"autoApprovalSettings",
+			promptSkillAutoApprovalSettings(this.controller.stateManager.getGlobalSettingsKey("autoApprovalSettings")),
+		)
+		this.controller.stateManager.setGlobalState("autoApproveAllToggled", false)
+		this.controller.stateManager.setGlobalState("yoloModeToggled", false)
 		// PromptSkill runs Cline inside Theia, where VSCode terminal shell integration is unreliable
 		// and can show upstream VSCode troubleshooting notices to candidates.
 		this.controller.stateManager.setGlobalState("vscodeTerminalExecutionMode", "backgroundExec")

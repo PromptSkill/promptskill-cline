@@ -17,6 +17,7 @@ import {
 } from "@shared/storage/state-keys"
 import type { StorageContext } from "@shared/storage/storage-context"
 import chokidar, { FSWatcher } from "chokidar"
+import { promptSkillAutoApprovalSettings } from "@/integrations/promptskill/policy"
 import { isPromptSkillCandidateWorkspace } from "@/integrations/promptskill/workspace"
 import {
 	promptSkillApiConfigurationFromWorkspaceEnvironment,
@@ -171,6 +172,17 @@ export class StateManager {
 					"nativeToolCallEnabled",
 					promptSkillNativeToolCallsEnabled(workspaceEnvironment),
 				)
+				// PromptSkill needs Cline's visible diff editor path for live candidate feedback.
+				// Upstream background edits batch file updates and make changes appear all at once.
+				StateManager.instance.setGlobalState("backgroundEditEnabled", false)
+				// PromptSkill: keep low-risk read/safe-command approvals on, but require
+				// visible review for edits and integrations even if old state enabled them.
+				StateManager.instance.setGlobalState(
+					"autoApprovalSettings",
+					promptSkillAutoApprovalSettings(StateManager.instance.getGlobalSettingsKey("autoApprovalSettings")),
+				)
+				StateManager.instance.setGlobalState("autoApproveAllToggled", false)
+				StateManager.instance.setGlobalState("yoloModeToggled", false)
 			}
 
 			await AgentConfigLoader.getInstance().ready()

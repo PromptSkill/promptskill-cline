@@ -1,3 +1,4 @@
+import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { Mode } from "@shared/storage/types"
 import type { TelemetrySetting } from "@shared/TelemetrySetting"
 import { isPromptSkillWorkspace } from "./workspace"
@@ -42,6 +43,44 @@ export function promptSkillTelemetrySetting(defaultTelemetrySetting: TelemetrySe
 	return "disabled"
 }
 
+export function promptSkillAutoApprovalSettings(defaultAutoApprovalSettings: AutoApprovalSettings): AutoApprovalSettings {
+	if (!isPromptSkillWorkspace()) {
+		return defaultAutoApprovalSettings
+	}
+
+	return {
+		...defaultAutoApprovalSettings,
+		enabled: true,
+		actions: {
+			readFiles: true,
+			readFilesExternally: false,
+			editFiles: false,
+			editFilesExternally: false,
+			executeSafeCommands: true,
+			executeAllCommands: false,
+			useBrowser: false,
+			useMcp: false,
+		},
+		enableNotifications: false,
+	}
+}
+
+export function promptSkillAutoApproveAllToggled(defaultAutoApproveAllToggled: boolean): boolean {
+	if (!isPromptSkillWorkspace()) {
+		return defaultAutoApproveAllToggled
+	}
+
+	return false
+}
+
+export function promptSkillYoloModeToggled(defaultYoloModeToggled: boolean): boolean {
+	if (!isPromptSkillWorkspace()) {
+		return defaultYoloModeToggled
+	}
+
+	return false
+}
+
 export function promptSkillMistakeLimitMessage(defaultMessage: string): string {
 	if (!isPromptSkillWorkspace()) {
 		return defaultMessage
@@ -64,4 +103,12 @@ export function shouldUsePromptSkillNoOpTelemetryProviders(): boolean {
 
 export function shouldUsePromptSkillNoOpErrorProvider(): boolean {
 	return isPromptSkillWorkspace()
+}
+
+export function promptSkillAttemptCompletionCommand(defaultCommand: string | undefined): string | undefined {
+	if (!isPromptSkillWorkspace()) {
+		return defaultCommand
+	}
+
+	return undefined
 }

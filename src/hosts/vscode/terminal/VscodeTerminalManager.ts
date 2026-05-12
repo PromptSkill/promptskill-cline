@@ -2,6 +2,7 @@ import { arePathsEqual } from "@utils/path"
 import { getShellForProfile } from "@utils/shell"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
+import { logPromptSkillResourceSnapshot } from "@/integrations/promptskill/resourceUsage"
 import {
 	TerminalInfo as ITerminalInfo,
 	ITerminalManager,
@@ -165,8 +166,15 @@ export class VscodeTerminalManager implements ITerminalManager {
 		// Cast to VSCode-specific TerminalInfo for internal use
 		// Using unknown as intermediate cast due to structural differences between ITerminal and vscode.Terminal
 		const vscodeTerminalInfo = terminalInfo as unknown as TerminalInfo
+		const commandStartedAt = Date.now()
+		const commandMetadata = {
+			terminalId: vscodeTerminalInfo.id,
+			commandPreview: previewTerminalCommand(command),
+			commandLength: command.length,
+		}
 		Logger.log(`[TerminalManager] Running command on terminal ${vscodeTerminalInfo.id}: "${command}"`)
 		Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} busy state before: ${vscodeTerminalInfo.busy}`)
+		logPromptSkillResourceSnapshot("terminal_command_start", commandMetadata)
 
 		vscodeTerminalInfo.busy = true
 		vscodeTerminalInfo.lastCommand = command
@@ -175,12 +183,20 @@ export class VscodeTerminalManager implements ITerminalManager {
 
 		process.once("completed", () => {
 			Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} completed, setting busy to false`)
+			logPromptSkillResourceSnapshot("terminal_command_completed", {
+				...commandMetadata,
+				durationMs: Date.now() - commandStartedAt,
+			})
 			vscodeTerminalInfo.busy = false
 		})
 
 		// if shell integration is not available, remove terminal so it does not get reused as it may be running a long-running process
 		process.once("no_shell_integration", () => {
 			Logger.log(`no_shell_integration received for terminal ${vscodeTerminalInfo.id}`)
+			logPromptSkillResourceSnapshot("terminal_command_no_shell_integration", {
+				...commandMetadata,
+				durationMs: Date.now() - commandStartedAt,
+			})
 			// Remove the terminal so we can't reuse it (in case it's running a long-running process)
 			TerminalRegistry.removeTerminal(vscodeTerminalInfo.id)
 			this.terminalIds.delete(vscodeTerminalInfo.id)
@@ -193,6 +209,11 @@ export class VscodeTerminalManager implements ITerminalManager {
 			})
 			process.once("error", (error) => {
 				Logger.error(`Error in terminal ${vscodeTerminalInfo.id}:`, error)
+				logPromptSkillResourceSnapshot("terminal_command_error", {
+					...commandMetadata,
+					durationMs: Date.now() - commandStartedAt,
+					message: error instanceof Error ? error.message : String(error),
+				})
 				reject(error)
 			})
 		})
@@ -225,6 +246,11 @@ export class VscodeTerminalManager implements ITerminalManager {
 					Logger.warn(
 						`[TerminalManager Test] Shell integration timed out or failed for terminal ${vscodeTerminalInfo.id}: ${err.message}`,
 					)
+					logPromptSkillResourceSnapshot("terminal_shell_integration_timeout", {
+						...commandMetadata,
+						durationMs: Date.now() - commandStartedAt,
+						message: err instanceof Error ? err.message : String(err),
+					})
 				})
 				.finally(() => {
 					Logger.log(`[TerminalManager Test] Proceeding with command execution for terminal ${vscodeTerminalInfo.id}.`)
@@ -479,4 +505,8 @@ export class VscodeTerminalManager implements ITerminalManager {
 	closeAllTerminals(): number {
 		return this.closeTerminals(() => true, true)
 	}
+}
+
+function previewTerminalCommand(command: string): string {
+	return command.length > 200 ? `${command.slice(0, 200)}...` : command
 }

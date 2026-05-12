@@ -21,7 +21,8 @@ Shared top-level rules summary:
 - Every unavoidable upstream-file hook must include a short `PromptSkill:` comment explaining why the fork still needs that divergence.
 - Prefer current upstream Cline model/provider support over manually maintained model IDs or provider patches.
 - Do not directly edit generated files unless the source schema/config changes and the generation command is documented.
-- Keep `PROMPTSKILL_FORK.md` aligned with the active PromptSkill deltas, upstream base, and release workflow.
+- Do not run `npm run vsix` just to refresh local development artifacts. The backend reconcile script owns VSIX rebuilds from the Cline source hash; after Cline changes, tell the user to run `/opt/promptskill/infra/scripts/development/reconcile-local-development.sh` instead.
+- Keep `PROMPTSKILL_FORK.md` aligned with the current active PromptSkill deltas, upstream base, and release workflow. When adding, changing, or removing PromptSkill-specific behavior in Cline, update `PROMPTSKILL_FORK.md`; it should describe current deltas only, not historical patches.
 
 ---
 
@@ -65,6 +66,22 @@ Upstream files should ask the PromptSkill boundary questions such as:
 - whether to hide or lock settings
 - whether to disable Cline SaaS telemetry/error providers
 - and so on, as needed to support PromptSkill
+
+---
+
+# Cline Post-Implementation Review
+
+In addition to the top-level `AGENTS.md` post-implementation review, Cline changes require these fork-specific checks:
+
+1. PromptSkill integration boundary review
+   - Check whether new PromptSkill-specific behavior is placed under `src/integrations/promptskill` where possible.
+   - Check whether unavoidable upstream-file changes are limited to small hooks into the PromptSkill integration boundary.
+   - Check whether each unavoidable upstream-file hook has a short `PromptSkill:` comment explaining why the divergence is still needed.
+   - Move PromptSkill-specific logic into the integration boundary immediately when it can be done without making the code less clear.
+2. Fork record review
+   - Check whether `PROMPTSKILL_FORK.md` reflects the current active PromptSkill-specific Cline behavior after the change.
+   - The fork record should explain why each active delta exists and stay focused on current behavior, not historical patches.
+   - Update `PROMPTSKILL_FORK.md` immediately when active fork deltas are added, changed, or removed.
 
 ---
 

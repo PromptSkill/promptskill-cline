@@ -7,6 +7,7 @@ import * as fs from "fs/promises"
 import * as iconv from "iconv-lite"
 import { HostProvider } from "@/hosts/host-provider"
 import { diagnosticsToProblemsString, getNewDiagnostics } from "@/integrations/diagnostics"
+import { isPromptSkillDiagnosticLoggingEnabled, logPromptSkillResourceSnapshot } from "@/integrations/promptskill/resourceUsage"
 import { DiagnosticSeverity, FileDiagnostics } from "@/shared/proto/index.cline"
 import { Logger } from "@/shared/services/Logger"
 import { detectEncoding } from "../misc/extract-text"
@@ -194,6 +195,7 @@ export abstract class DiffViewProvider {
 		isFinal: boolean,
 		changeLocation?: { startLine: number; endLine: number; startChar: number; endChar: number },
 	) {
+		const updateStartedAt = Date.now()
 		if (!this.isEditing) {
 			throw new Error("Not editing any file")
 		}
@@ -254,9 +256,12 @@ export abstract class DiffViewProvider {
 			const endLine = isFinal ? await this.getDocumentLineCount() : currentLine + 1
 
 			const rangeToReplace = { startLine: 0, endLine }
+			const replaceStartedAt = Date.now()
 			await this.replaceText(contentToReplace, rangeToReplace, currentLine)
+			const replaceDurationMs = Date.now() - replaceStartedAt
 
 			// Scroll to the actual change location if provided.
+			const scrollStartedAt = Date.now()
 			if (changeLocation) {
 				// We have the actual location of the change, scroll to it
 				const targetLine = changeLocation.startLine
@@ -275,6 +280,19 @@ export abstract class DiffViewProvider {
 					await this.scrollEditorToLine(currentLine)
 				}
 			}
+			const scrollDurationMs = Date.now() - scrollStartedAt
+			this.logPromptSkillUpdateTiming("updated_document", {
+				isFinal,
+				relPath: this.relPath,
+				accumulatedLength: accumulatedContent.length,
+				contentToReplaceLength: contentToReplace.length,
+				currentLine,
+				endLine,
+				diffLineCount: diffLines.length,
+				replaceDurationMs,
+				scrollDurationMs,
+				durationMs: Date.now() - updateStartedAt,
+			})
 		}
 
 		// Update the streamedLines with the new accumulated content
@@ -287,6 +305,15 @@ export abstract class DiffViewProvider {
 			// Switch to specialized editor for specific file types (e.g., Jupyter notebooks)
 			await this.switchToSpecializedEditor()
 		}
+	}
+
+	private logPromptSkillUpdateTiming(event: string, metadata: Record<string, unknown>): void {
+		if (!isPromptSkillDiagnosticLoggingEnabled()) {
+			return
+		}
+
+		Logger.info(`[PromptSkill][diff-update] ${event} ${JSON.stringify(metadata)}`)
+		logPromptSkillResourceSnapshot(`diff_update_${event}`, metadata)
 	}
 
 	/**

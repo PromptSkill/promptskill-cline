@@ -66,7 +66,7 @@ const generic: ClineToolSpec = {
 	id,
 	name: "replace_in_file",
 	description:
-		"Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
+		"Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. Use this tool for small or targeted edits to existing files instead of rewriting the whole file.",
 	parameters: [
 		{
 			name: "path",
@@ -89,7 +89,7 @@ const NATIVE_NEXT_GEN: ClineToolSpec = {
 	id,
 	name: "replace_in_file",
 	description:
-		"[IMPORTANT: Always output the absolutePath first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
+		"[IMPORTANT: Always output the absolutePath first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. Use this tool for small or targeted edits to existing files instead of rewriting the whole file.",
 	parameters: [
 		{
 			name: "absolutePath",

@@ -45,12 +45,16 @@ export function shouldShowClineTelemetrySetting(isPromptSkillWorkspace: boolean 
 	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
 }
 
+export function shouldShowClineAutoApproveControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
 export function promptSkillFileActionHelperText(isPromptSkillWorkspace: boolean | undefined): string | undefined {
 	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)) {
 		return undefined
 	}
 
-	return "Review the proposed file changes, then accept or reject them."
+	return "Review changes, then accept or reject them. Changes may take a moment to load."
 }
 
 export function promptSkillButtonConfig<T extends ButtonConfig>(buttonConfig: T, isPromptSkillWorkspace: boolean | undefined): T {
@@ -71,14 +75,14 @@ export function promptSkillButtonConfig<T extends ButtonConfig>(buttonConfig: T,
 
 export function filterPromptSkillFeatureTips<T extends FeatureTip>(
 	featureTips: T[],
-	mcpFeatureTipText: string,
+	promptSkillAllowedFeatureTipTexts: ReadonlySet<string>,
 	isPromptSkillWorkspace: boolean | undefined,
 ): T[] {
 	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)) {
 		return featureTips
 	}
 
-	return featureTips.filter((tip) => tip.text !== mcpFeatureTipText)
+	return featureTips.filter((tip) => promptSkillAllowedFeatureTipTexts.has(tip.text))
 }
 
 export function filterPromptSkillNavigationTabs<T extends NavigationTab>(

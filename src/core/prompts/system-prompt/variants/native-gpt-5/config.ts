@@ -1,10 +1,4 @@
-import {
-	isGptOssModelFamily,
-	isGPT5ModelFamily,
-	isGPT51Model,
-	isGPT52Model,
-	isNextGenModelProvider,
-} from "@utils/model-utils"
+import { isGPT5ModelFamily, isGPT51Model, isGPT52Model, isGptOssModelFamily, isNextGenModelProvider } from "@utils/model-utils"
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
 import { ClineDefaultTool } from "@/shared/tools"
@@ -65,10 +59,10 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5)
 	.tools(
 		ClineDefaultTool.BASH,
 		ClineDefaultTool.FILE_READ,
-		// Should disable FILE_NEW and FILE_EDIT when enabled
-		ClineDefaultTool.APPLY_PATCH,
-		// ClineDefaultTool.FILE_NEW, // Replaced by APPLY_PATCH
-		// ClineDefaultTool.FILE_EDIT, // Replaced by APPLY_PATCH
+		// PromptSkill uses the file-edit tools instead of native apply_patch because
+		// apply_patch batches edit feedback, which makes candidate diff feedback loops slower.
+		ClineDefaultTool.FILE_NEW,
+		ClineDefaultTool.FILE_EDIT,
 		ClineDefaultTool.SEARCH,
 		ClineDefaultTool.LIST_FILES,
 		ClineDefaultTool.LIST_CODE_DEF,

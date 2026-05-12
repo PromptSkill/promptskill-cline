@@ -29,10 +29,12 @@ import { HostProvider } from "@/hosts/host-provider"
 import { PromptSkillAssessmentHydrationWatcher } from "@/integrations/promptskill/assessmentHydrationWatcher"
 import {
 	promptSkillAnnouncementEnabled,
+	promptSkillAutoApprovalSettings,
 	promptSkillBanners,
 	promptSkillOnboardingModels,
 	promptSkillTelemetrySetting,
 	promptSkillWelcomeViewCompleted,
+	promptSkillYoloModeToggled,
 } from "@/integrations/promptskill/policy"
 import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { ExtensionRegistryInfo } from "@/registry"
@@ -262,7 +264,9 @@ export class Controller {
 
 		await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
 
-		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+		const autoApprovalSettings = promptSkillAutoApprovalSettings(
+			this.stateManager.getGlobalSettingsKey("autoApprovalSettings"),
+		)
 		const shellIntegrationTimeout = this.stateManager.getGlobalSettingsKey("shellIntegrationTimeout")
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
@@ -868,13 +872,15 @@ export class Controller {
 		const apiConfiguration = this.stateManager.getApiConfiguration()
 		const lastShownAnnouncementId = this.stateManager.getGlobalStateKey("lastShownAnnouncementId")
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
-		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+		const autoApprovalSettings = promptSkillAutoApprovalSettings(
+			this.stateManager.getGlobalSettingsKey("autoApprovalSettings"),
+		)
 		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
 		const focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
 		const preferredLanguage = this.stateManager.getGlobalSettingsKey("preferredLanguage")
 		const mode = this.stateManager.getGlobalSettingsKey("mode")
 		const strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
-		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
+		const yoloModeToggled = promptSkillYoloModeToggled(this.stateManager.getGlobalSettingsKey("yoloModeToggled"))
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const userInfo = this.stateManager.getGlobalStateKey("userInfo")

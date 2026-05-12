@@ -15,29 +15,28 @@ PromptSkill maintains this fork as an upstream-first fork of `cline/cline`.
 - Warm workspace assessment hydration via `/home/theia/.promptskill/workspace.env` and reload token files.
 - PromptSkill AI-compatible endpoint configuration with assessment-session header and browser-cookie workspace auth.
 - Candidate-mode provider policy that routes through upstream's OpenAI-compatible path when required.
+- Native GPT tool selection uses Cline file-edit tools (`write_to_file` and `replace_in_file`) instead of `apply_patch`
+  because `apply_patch` batches feedback and slows candidate live-diff loops in Theia.
+- Execute-command prompting tells models not to create or edit files through shell/Python/heredoc/redirect techniques;
+  file changes should go through `replace_in_file` or `write_to_file` so Cline can track and display them.
+- PromptSkill removes and ignores `attempt_completion.command` because candidate workspaces already manage preview/dev
+  server access, and post-completion commands can unnecesserily repeat verification work after the task appears complete.
+- PromptSkill/Theia live-diff handling uses direct active-editor edits for streamed diff updates where upstream uses
+  workspace-level edits, because Theia's `workspace.applyEdit` path can delay candidate feedback.
+- PromptSkill edit/diff resource diagnostics are gated behind `CLINE_DEBUG_LOGGING=true` to avoid output-channel and
+  resource-snapshot overhead during normal candidate streaming.
 - Candidate-mode telemetry and Cline SaaS error-provider suppression.
 - Theia secret-storage shim for runtime environments where the default VS Code secret storage path fails.
 - Candidate UI restrictions that hide or lock settings not intended for assessments.
 
-## Historical Patches To Re-Evaluate
+## Upstream Merge Review
 
-- Manual OpenAI/native model catalog additions.
-- Provider compatibility fixes.
-- Prompt/tool behavior patches.
-
-## Dropped Or Replaced Historical Patches
-
-- `Replace`: old OpenAI-native compatible endpoint patches are replaced with upstream's OpenAI-compatible provider because it already supports custom base URLs and request headers.
-- `Drop`: manually added GPT model IDs are not carried forward; upstream `v3.79.0` includes current OpenAI model catalog support.
-- `Keep`: startup telemetry and Cline SaaS error-provider skips remain, but are isolated behind PromptSkill policy hooks.
-- `Keep`: Theia secret-storage workaround remains until PromptSkill validates upstream or Theia provides a reliable container secret-storage path.
-
-For each upstream merge, classify every historical patch as:
+For each upstream merge, classify every active PromptSkill delta as:
 
 - `Keep`: still required for PromptSkill runtime.
 - `Drop`: upstream now covers the behavior.
 - `Replace`: upstream has a better mechanism.
-- `Defer`: not needed for the first migration.
+- `Defer`: not needed for the current merge.
 
 ## Merge Workflow
 
@@ -45,21 +44,14 @@ For each upstream merge, classify every historical patch as:
 2. Review `src/integrations/promptskill` and the small upstream hook call sites.
 3. Classify current PromptSkill deltas as `Keep`, `Drop`, `Replace`, or `Defer`.
 4. Prefer upstream model/provider support before carrying PromptSkill patches forward.
-5. Package a versioned VSIX release.
-6. Publish the VSIX release artifact and checksum.
-7. Update backend pinned VSIX config:
-   - `PROMPTSKILL_CLINE_VSIX_VERSION`
-   - `PROMPTSKILL_CLINE_VSIX_URL`
-   - `PROMPTSKILL_CLINE_VSIX_SHA256`
-8. Rebuild the workspace image and validate candidate flow in local and staging.
+5. Commit and push the Cline fork changes, then update the backend submodule pointer.
+6. Rebuild the local development workspace image through the backend reconcile script (shown below) and validate the candidate flow.
+7. Validate staging through the normal backend deployment flow.
 
-## Build And Release Commands
+## Local Development Rebuild
 
 ```bash
-npm install
-npm run check-types
-npm run vsix
-sha256sum dist/promptskill-cline.vsix
+/opt/promptskill/infra/scripts/development/reconcile-local-development.sh
 ```
 
-The backend consumes a pinned release artifact. Use `PROMPTSKILL_CLINE_LOCAL_VSIX=/path/to/promptskill-cline.vsix` only for local development override testing.
+Note for AI Agents: do not run this reconcile script from an automated unless the user explicitly asks. When Cline source changes need to be applied locally, tell the user to run the command above.

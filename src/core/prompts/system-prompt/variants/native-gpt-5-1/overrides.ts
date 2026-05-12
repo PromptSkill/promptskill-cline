@@ -99,7 +99,7 @@ This ensures your work aligns with the existing codebase structure and avoids un
    
    If issues are found during this self-review, refine the code and present the improved version. Mention what you improved and why.
 
-5. Once you've completed the user's task, you must use the attempt_completion tool to present the result of the task to the user. You may also provide a CLI command to showcase the result of your task; this can be particularly useful for web development tasks, where you can run e.g. \`open index.html\` to show the website you've built.
+5. Once you've completed the user's task, you must use the attempt_completion tool to present the result of the task to the user.
 
 6. If the task is not actionable, you may use the attempt_completion tool to explain to the user why the task cannot be completed, or provide a simple answer if that is what the user is looking for.`
 

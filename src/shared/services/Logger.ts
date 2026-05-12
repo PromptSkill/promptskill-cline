@@ -2,7 +2,8 @@
  * Simple Logger utility for the extension's backend code.
  */
 export class Logger {
-	private static isVerbose = process.env.IS_DEV === "true"
+	// Debug/trace output can flood Theia's output-channel RPC path during model streaming and slow editor operations.
+	private static debugLoggingEnabled = process.env.CLINE_DEBUG_LOGGING === "true"
 
 	private static subscribers: Set<(msg: string) => void> = new Set()
 
@@ -36,6 +37,9 @@ export class Logger {
 	}
 
 	static debug(message: string, ...args: any[]) {
+		if (!Logger.isDebugLoggingEnabled()) {
+			return
+		}
 		Logger.#output("DEBUG", message, undefined, args)
 	}
 
@@ -44,13 +48,20 @@ export class Logger {
 	}
 
 	static trace(message: string, ...args: any[]) {
+		if (!Logger.isDebugLoggingEnabled()) {
+			return
+		}
 		Logger.#output("TRACE", message, undefined, args)
+	}
+
+	static isDebugLoggingEnabled(): boolean {
+		return Logger.debugLoggingEnabled
 	}
 
 	static #output(level: string, message: string, error: Error | undefined, args: any[]) {
 		try {
 			let fullMessage = message
-			if (Logger.isVerbose && args.length > 0) {
+			if (Logger.isDebugLoggingEnabled() && args.length > 0) {
 				fullMessage += ` ${args.map((arg) => JSON.stringify(arg)).join(" ")}`
 			}
 			const errorSuffix = error?.message ? ` ${error.message}` : ""
