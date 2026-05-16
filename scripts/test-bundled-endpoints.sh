@@ -49,7 +49,7 @@ echo ""
 # Step 3: Build VSIX package
 echo "3️⃣  Building VSCode extension (VSIX)..."
 echo ""
-npx @vscode/vsce package --no-dependencies
+npx @vscode/vsce@3.9.1 package --no-dependencies
 echo ""
 
 # Find the newly built VSIX
@@ -73,7 +73,7 @@ echo "4️⃣  Building CLI package (TGZ)..."
 echo ""
 cd cli
 echo "Building CLI code..."
-npm run typecheck && yes y | npx tsx esbuild.mts || npx tsx esbuild.mts
+npm run typecheck && yes y | npx tsx@4.22.0 esbuild.mts || npx tsx@4.22.0 esbuild.mts
 echo ""
 echo "Packaging CLI..."
 npm pack

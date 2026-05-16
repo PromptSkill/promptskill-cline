@@ -101,7 +101,9 @@ export async function detectImageUrl(url: string): Promise<boolean> {
 		})
 
 		const contentType = response.headers["content-type"]
-		return contentType && contentType.startsWith("image/")
+		// PromptSkill: newer Axios versions type response headers as string or structured values.
+		// Only string content-types can be inspected with startsWith.
+		return typeof contentType === "string" && contentType.startsWith("image/")
 	} catch (_error) {
 		// If we can't determine, fall back to checking the file extension
 		return /\.(jpg|jpeg|png|gif|webp|bmp|svg|tiff|tif|avif)$/i.test(url)
