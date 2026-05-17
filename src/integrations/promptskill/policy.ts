@@ -86,7 +86,7 @@ export function promptSkillMistakeLimitMessage(defaultMessage: string): string {
 		return defaultMessage
 	}
 
-	return "PromptSkill AI is having trouble. You can add guidance or continue working manually."
+	return "The AI is having trouble. You can add guidance or continue working manually."
 }
 
 export function promptSkillApiProviderForMode(_mode: Mode, defaultProvider: string | undefined): string | undefined {

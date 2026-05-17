@@ -98,6 +98,8 @@ export function getOpenAIToolParams(tools?: OpenAITool[], enableParallelToolCall
 
 	return {
 		tools,
+		// PromptSkill candidate chat is routed through the backend OpenAI-compatible
+		// proxy, which force-sets tool_choice to required before forwarding to OpenAI.
 		tool_choice: "auto" as ChatCompletionToolChoiceOption,
 		parallel_tool_calls: enableParallelToolCalls,
 	}
