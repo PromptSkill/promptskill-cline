@@ -21,7 +21,7 @@ Shared top-level rules summary:
 - Every unavoidable upstream-file hook must include a short `PromptSkill:` comment explaining why the fork still needs that divergence.
 - Prefer current upstream Cline model/provider support over manually maintained model IDs or provider patches.
 - Do not directly edit generated files unless the source schema/config changes and the generation command is documented.
-- Do not run `npm run vsix` just to refresh local development artifacts. The backend reconcile script owns VSIX rebuilds from the Cline source hash; after Cline changes, tell the user to run `/opt/promptskill/infra/scripts/development/reconcile-local-development.sh` instead.
+- Do not run `npm run vsix` just to refresh local development artifacts. The backend reconcile script owns VSIX rebuilds from the Cline source hash; after Cline changes, tell the user to run `psdev reconcile-local-development` instead.
 - Keep `PROMPTSKILL_FORK.md` aligned with the current active PromptSkill deltas, upstream base, and release workflow. When adding, changing, or removing PromptSkill-specific behavior in Cline, update `PROMPTSKILL_FORK.md`; it should describe current deltas only, not historical patches.
 
 ---

@@ -51,7 +51,7 @@ For each upstream merge, classify every active PromptSkill delta as:
 ## Local Development Rebuild
 
 ```bash
-/opt/promptskill/infra/scripts/development/reconcile-local-development.sh
+psdev reconcile-local-development
 ```
 
 Note for AI Agents: do not run this reconcile script from an automated unless the user explicitly asks. When Cline source changes need to be applied locally, tell the user to run the command above.
