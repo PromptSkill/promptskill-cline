@@ -2,6 +2,7 @@ import { ApiConfiguration, openAiModelInfoSaneDefaults } from "@shared/api"
 
 export const PROMPTSKILL_REQUIRED_CANDIDATE_WORKSPACE_ENV_KEYS = [
 	"PROMPTSKILL_CLINE_ASSESSMENT_SESSION_ID",
+	"PROMPTSKILL_CLINE_WORKSPACE_AI_CHAT_TOKEN",
 	"PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL",
 	"PROMPTSKILL_CLINE_OPENAI_MODEL_ID",
 	"PROMPTSKILL_CLINE_OPENAI_MAX_COMPLETION_TOKENS",
@@ -70,10 +71,8 @@ export function promptSkillApiConfigurationFromWorkspaceEnvironment(
 		actModeOpenAiModelInfo: modelInfo,
 		// If this is not configured properly then on dev environment cloudflare zero trust may block requests.
 		openAiBaseUrl: workspaceEnvironment.PROMPTSKILL_CLINE_WORKSPACE_API_AI_COMPAT_BASE_URL,
-		// PromptSkill uses cookie-based workspace auth via Traefik forwardAuth.
-		// Requests from Cline automatically include browser cookies, so no secret API key is needed.
-		openAiApiKey: "browser_workspace_auth_sentinel",
-		openAiNativeApiKey: "browser_workspace_auth_sentinel",
+		openAiApiKey: workspaceEnvironment.PROMPTSKILL_CLINE_WORKSPACE_AI_CHAT_TOKEN,
+		openAiNativeApiKey: workspaceEnvironment.PROMPTSKILL_CLINE_WORKSPACE_AI_CHAT_TOKEN,
 		openAiHeaders: {
 			"X-Assessment-Session-Id": workspaceEnvironment.PROMPTSKILL_CLINE_ASSESSMENT_SESSION_ID,
 		},

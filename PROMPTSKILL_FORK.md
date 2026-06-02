@@ -13,7 +13,7 @@ PromptSkill maintains this fork as an upstream-first fork of `cline/cline`.
 - PromptSkill branding and VSIX output naming.
 - Candidate and warm workspace detection from PromptSkill environment markers.
 - Warm workspace assessment hydration via `/home/theia/.promptskill/workspace.env` and reload token files.
-- PromptSkill AI-compatible endpoint configuration with assessment-session header and browser-cookie workspace auth.
+- PromptSkill AI-compatible endpoint configuration with assessment-session header and signed workspace AI bearer-token auth.
 - Candidate-mode provider policy that routes through upstream's OpenAI-compatible path when required.
 - Native GPT tool selection uses Cline file-edit tools (`write_to_file` and `replace_in_file`) instead of `apply_patch`
   because `apply_patch` batches feedback and slows candidate live-diff loops in Theia.
