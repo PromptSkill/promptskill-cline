@@ -61,7 +61,7 @@
 		"tailwind-merge": "3.3.1",
 		"tailwindcss-animate": "1.0.7",
 		"unified": "11.0.5",
-		"uuid": "9.0.1"
+		"uuid": "11.1.1"
 	},
 	"devDependencies": {
 		"@storybook/react-vite": "9.1.7",
@@ -77,14 +77,14 @@
 		"@types/uuid": "9.0.8",
 		"@types/vscode-webview": "1.57.5",
 		"@vitejs/plugin-react-swc": "3.11.0",
-		"@vitest/coverage-v8": "3.2.4",
+		"@vitest/coverage-v8": "4.1.0",
 		"globals": "15.15.0",
 		"jsdom": "26.1.0",
 		"storybook": "9.1.20",
 		"tailwindcss": "4.1.13",
 		"typescript": "5.9.2",
 		"vite": "7.3.3",
-		"vitest": "3.2.4"
+		"vitest": "4.1.0"
 	},
 	"optionalDependencies": {
 		"@rollup/rollup-linux-arm64-gnu": "4.60.0",
@@ -94,5 +94,10 @@
 		"@tailwindcss/oxide-linux-x64-gnu": "4.1.18",
 		"lightningcss-linux-x64-gnu": "1.31.1",
 		"lightningcss-win32-x64-msvc": "1.29.2"
+	},
+	"overrides": {
+		"js-cookie": "3.0.7",
+		"protobufjs": "7.5.8",
+		"ws": "8.20.1"
 	}
 }
