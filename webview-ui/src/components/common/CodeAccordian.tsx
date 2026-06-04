@@ -110,10 +110,10 @@ const CodeAccordian = ({
 					{hasTrailingAction && (
 						<Button
 							aria-label={trailingActionLabel}
-							className="shrink-0 cursor-pointer select-none border-l border-editor-group-border bg-toolbar-hover/50 px-2.5 py-[9px] text-description hover:bg-toolbar-hover hover:text-foreground active:bg-toolbar-hover/80"
+							className="shrink-0 self-stretch cursor-pointer select-none border-l border-editor-group-border bg-toolbar-hover/40 py-0 pl-3 pr-2.5 text-description transition-colors hover:bg-toolbar-hover hover:text-foreground active:bg-toolbar-hover/80"
 							onClick={onTrailingAction}
 							variant="text">
-							<span>{trailingActionLabel}</span>
+							<span className="leading-none">{trailingActionLabel}</span>
 							<ChevronRightIcon className="size-3" />
 						</Button>
 					)}
