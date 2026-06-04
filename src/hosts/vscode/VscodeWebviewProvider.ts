@@ -174,6 +174,12 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				}
 				break
 			}
+			case "promptskill_reopen_current_diff": {
+				// PromptSkill: candidates can close the live diff while approval is still pending,
+				// so the chat needs a side-effect-only way to reveal it again without answering the ask.
+				await this.controller.task?.reopenCurrentFileEditDiff()
+				break
+			}
 			default: {
 				Logger.error("Received unhandled WebviewMessage type:", JSON.stringify(message))
 			}

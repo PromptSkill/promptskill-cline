@@ -11,6 +11,10 @@ type ButtonConfig = {
 	secondaryText?: string
 }
 
+type FileEditTool = {
+	tool?: string
+}
+
 /**
  * Webview-side PromptSkill policy boundary.
  *
@@ -54,7 +58,7 @@ export function promptSkillFileActionHelperText(isPromptSkillWorkspace: boolean 
 		return undefined
 	}
 
-	return "Review changes, then accept or reject them. Changes may take a moment to load."
+	return "Review changes, then accept or reject them. Use View Changes if you closed the diff."
 }
 
 export function promptSkillButtonConfig<T extends ButtonConfig>(buttonConfig: T, isPromptSkillWorkspace: boolean | undefined): T {
@@ -70,6 +74,22 @@ export function promptSkillButtonConfig<T extends ButtonConfig>(buttonConfig: T,
 		...buttonConfig,
 		primaryText: "Accept Changes",
 		secondaryText: "Reject Changes",
+	}
+}
+
+export function shouldShowPromptSkillViewChangesButton(
+	message: { type?: string; ask?: string; text?: string } | undefined,
+	isPromptSkillWorkspace: boolean | undefined,
+): boolean {
+	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace) || message?.type !== "ask" || message.ask !== "tool") {
+		return false
+	}
+
+	try {
+		const tool = JSON.parse(message.text || "{}") as FileEditTool
+		return tool.tool === "editedExistingFile" || tool.tool === "newFileCreated"
+	} catch {
+		return false
 	}
 }
 

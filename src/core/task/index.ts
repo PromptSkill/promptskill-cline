@@ -824,6 +824,12 @@ export class Task {
 		this.taskState.askResponseFiles = files
 	}
 
+	async reopenCurrentFileEditDiff(): Promise<void> {
+		// PromptSkill: the chat can reveal a pending live diff without resolving
+		// the accept/reject ask when candidates close the diff tab.
+		await this.diffViewProvider.reopenDiffView()
+	}
+
 	async say(
 		type: ClineSay,
 		text?: string,

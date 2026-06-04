@@ -4,7 +4,9 @@ import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { VirtuosoHandle } from "react-virtuoso"
+import { PLATFORM_CONFIG } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { shouldShowPromptSkillViewChangesButton } from "@/integrations/promptskill/policy"
 import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
 
@@ -105,9 +107,15 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const { showScrollToBottom, scrollToBottomSmooth, disableAutoScrollRef } = scrollBehavior
 
 	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
+	// PromptSkill: pending file approvals need a side-effect-only affordance to
+	// reopen the live diff after the candidate closes the tab.
+	const showViewChanges = shouldShowPromptSkillViewChangesButton(lastMessage, isPromptSkillWorkspace)
 	const hasButtons = primaryText || secondaryText
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
+	const reopenPromptSkillDiff = () => {
+		PLATFORM_CONFIG.postMessage({ type: "promptskill_reopen_current_diff" })
+	}
 
 	// Early return for scroll button to avoid unnecessary computation
 	if (showScrollToBottom || !hasButtons) {
@@ -133,7 +141,16 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		}
 
 		return (
-			<div className="flex px-3.5">
+			<div className="flex px-3.5 gap-[6px]">
+				{showScrollToBottom && showViewChanges && (
+					<VSCodeButton
+						appearance="secondary"
+						className="flex-1"
+						disabled={!canInteract}
+						onClick={reopenPromptSkillDiff}>
+						View Changes
+					</VSCodeButton>
+				)}
 				<VSCodeButton
 					appearance="icon"
 					aria-label={showScrollToBottom ? "Scroll to bottom" : "Scroll to top"}
@@ -162,11 +179,16 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const opacity = canInteract || isStreaming ? 1 : 0.5
 
 	return (
-		<div className="flex px-3.5" style={{ opacity }}>
+		<div className="flex px-3.5 gap-[6px]" style={{ opacity }}>
+			{showViewChanges && (
+				<VSCodeButton appearance="secondary" className="flex-1" disabled={!canInteract} onClick={reopenPromptSkillDiff}>
+					View Changes
+				</VSCodeButton>
+			)}
 			{primaryText && primaryAction && (
 				<VSCodeButton
 					appearance="primary"
-					className={secondaryText ? "flex-1 mr-[6px]" : "flex-2"}
+					className={secondaryText || showViewChanges ? "flex-1" : "flex-2"}
 					disabled={!canInteract}
 					onClick={() => handleActionClick(primaryAction, inputValue, selectedImages, selectedFiles)}>
 					{primaryText}

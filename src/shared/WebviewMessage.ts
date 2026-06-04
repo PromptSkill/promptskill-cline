@@ -1,5 +1,7 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel"
+	// PromptSkill: the webview can ask the host to reveal the pending live diff
+	// without resolving the active accept/reject ask.
+	type: "grpc_request" | "grpc_request_cancel" | "promptskill_reopen_current_diff"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 }

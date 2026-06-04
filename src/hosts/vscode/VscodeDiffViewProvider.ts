@@ -7,10 +7,15 @@ import {
 	showPromptSkillEditableDiffDocument,
 } from "@/integrations/promptskill/diffEditor"
 import {
+	canSavePromptSkillCanonicalContentWithoutDiffEditor,
+	shouldContinueAfterPromptSkillDiffProjectionError,
+} from "@/integrations/promptskill/diffProjection"
+import {
 	logPromptSkillApplyEditTiming,
 	logPromptSkillEditProbe,
 	nextPromptSkillEditTimingOperationId,
 } from "@/integrations/promptskill/editTiming"
+import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { Logger } from "@/shared/services/Logger"
 import { arePathsEqual } from "@/utils/path"
 
@@ -22,6 +27,8 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 	private fadedOverlayController?: DecorationController
 	private activeLineController?: DecorationController
 	private notebookDiffView?: NotebookDiffView
+	private activeDiffDocumentChangeDisposable?: vscode.Disposable
+	private isApplyingPromptSkillLiveEdit = false
 
 	override async openDiffEditor(): Promise<void> {
 		if (!this.absolutePath) {
@@ -72,8 +79,33 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		this.fadedOverlayController = new DecorationController("fadedOverlay", this.activeDiffEditor)
 		this.activeLineController = new DecorationController("activeLine", this.activeDiffEditor)
+		// PromptSkill: candidate tweaks inside the visible diff must survive even if
+		// the diff editor is later closed before chat approval.
+		this.watchActiveDiffDocumentChanges()
 		// Apply faded overlay to all lines initially
 		this.fadedOverlayController.addLines(0, this.activeDiffEditor.document.lineCount)
+	}
+
+	private watchActiveDiffDocumentChanges(): void {
+		this.activeDiffDocumentChangeDisposable?.dispose()
+
+		const activeDiffDocument = this.activeDiffEditor?.document
+		if (!activeDiffDocument) {
+			return
+		}
+
+		this.activeDiffDocumentChangeDisposable = vscode.workspace.onDidChangeTextDocument((event) => {
+			if (!arePathsEqual(event.document.uri.fsPath, activeDiffDocument.uri.fsPath)) {
+				return
+			}
+
+			this.setCanonicalContentFromProjection(event.document.getText())
+			if (isPromptSkillWorkspace() && !this.isApplyingPromptSkillLiveEdit) {
+				void this.savePromptSkillLiveDocument(event.document).catch((error) => {
+					Logger.warn("[PromptSkill] Failed to save live diff edit after candidate document change:", error)
+				})
+			}
+		})
 	}
 
 	override async replaceText(
@@ -113,18 +145,23 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 			elapsedMs: Date.now() - applyEditStartedAt,
 		})
 
-		logPromptSkillEditProbe("edit_call_start", editMetadata)
-		await this.activeDiffEditor.edit((editBuilder) => {
-			logPromptSkillEditProbe("edit_callback_entered", {
-				...editMetadata,
-				elapsedMs: Date.now() - applyEditStartedAt,
+		this.isApplyingPromptSkillLiveEdit = true
+		try {
+			logPromptSkillEditProbe("edit_call_start", editMetadata)
+			await this.activeDiffEditor.edit((editBuilder) => {
+				logPromptSkillEditProbe("edit_callback_entered", {
+					...editMetadata,
+					elapsedMs: Date.now() - applyEditStartedAt,
+				})
+				editBuilder.replace(range, content)
+				logPromptSkillEditProbe("edit_callback_replace_returned", {
+					...editMetadata,
+					elapsedMs: Date.now() - applyEditStartedAt,
+				})
 			})
-			editBuilder.replace(range, content)
-			logPromptSkillEditProbe("edit_callback_replace_returned", {
-				...editMetadata,
-				elapsedMs: Date.now() - applyEditStartedAt,
-			})
-		})
+		} finally {
+			this.isApplyingPromptSkillLiveEdit = false
+		}
 		const applyEditDurationMs = Date.now() - applyEditStartedAt
 		logPromptSkillEditProbe("edit_call_resolved", {
 			...editMetadata,
@@ -144,18 +181,28 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 				// PromptSkill: keep Theia live-diff updates on the direct editor edit path;
 				// workspace.applyEdit can delay candidate feedback here.
 				const fixStartedAt = Date.now()
-				await this.activeDiffEditor.edit((editBuilder) => {
-					editBuilder.insert(document.lineAt(document.lineCount - 1).range.end, "\n".repeat(newlineDelta))
-				})
+				this.isApplyingPromptSkillLiveEdit = true
+				try {
+					await this.activeDiffEditor.edit((editBuilder) => {
+						editBuilder.insert(document.lineAt(document.lineCount - 1).range.end, "\n".repeat(newlineDelta))
+					})
+				} finally {
+					this.isApplyingPromptSkillLiveEdit = false
+				}
 				trailingNewlineFixDurationMs += Date.now() - fixStartedAt
 			} else if (newlineDelta < 0) {
 				// PromptSkill: keep Theia live-diff updates on the direct editor edit path;
 				// workspace.applyEdit can delay candidate feedback here.
 				const startLine = Math.max(0, document.lineCount + newlineDelta)
 				const fixStartedAt = Date.now()
-				await this.activeDiffEditor.edit((editBuilder) => {
-					editBuilder.delete(new vscode.Range(startLine, 0, document.lineCount, 0))
-				})
+				this.isApplyingPromptSkillLiveEdit = true
+				try {
+					await this.activeDiffEditor.edit((editBuilder) => {
+						editBuilder.delete(new vscode.Range(startLine, 0, document.lineCount, 0))
+					})
+				} finally {
+					this.isApplyingPromptSkillLiveEdit = false
+				}
 				trailingNewlineFixDurationMs += Date.now() - fixStartedAt
 			}
 		}
@@ -171,11 +218,31 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 			trailingNewlineFixDurationMs,
 		})
 
+		if (isPromptSkillWorkspace()) {
+			await this.savePromptSkillLiveDocument(document)
+		}
+
 		if (currentLine !== undefined) {
 			// Update decorations for the entire changed section
 			this.activeLineController?.setActiveLine(currentLine)
 			this.fadedOverlayController?.updateOverlayAfterLine(currentLine, document.lineCount)
 		}
+	}
+
+	protected override shouldContinueAfterProjectionError(error: unknown): boolean {
+		// PromptSkill: Theia live-diff failures should degrade to canonical-only
+		// saving in candidate workspaces, while upstream hosts keep failing fast.
+		if (!shouldContinueAfterPromptSkillDiffProjectionError(error)) {
+			return super.shouldContinueAfterProjectionError(error)
+		}
+
+		this.activeDiffEditor = undefined
+		this.fadedOverlayController = undefined
+		this.activeLineController = undefined
+		this.activeDiffDocumentChangeDisposable?.dispose()
+		this.activeDiffDocumentChangeDisposable = undefined
+
+		return true
 	}
 
 	override async scrollEditorToLine(line: number): Promise<void> {
@@ -210,6 +277,10 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 			const edit = new vscode.WorkspaceEdit()
 			edit.delete(document.uri, new vscode.Range(lineNumber, 0, document.lineCount, 0))
 			await vscode.workspace.applyEdit(edit)
+			if (isPromptSkillWorkspace()) {
+				this.setCanonicalContentFromProjection(document.getText())
+				await this.savePromptSkillLiveDocument(document)
+			}
 		}
 	}
 
@@ -230,15 +301,45 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 		return this.activeDiffEditor.document.getText()
 	}
 
+	protected override async getPreSaveContent(): Promise<string | undefined> {
+		if (!canSavePromptSkillCanonicalContentWithoutDiffEditor()) {
+			return await super.getPreSaveContent()
+		}
+
+		return this.getCanonicalContent()
+	}
+
 	protected override async saveDocument(): Promise<boolean> {
-		if (!this.activeDiffEditor) {
+		const canonicalContent = this.getCanonicalContent()
+		if (canonicalContent === undefined) {
 			return false
 		}
-		if (!this.activeDiffEditor.document.isDirty) {
+
+		if (this.activeDiffEditor?.document) {
+			try {
+				const document = this.activeDiffEditor.document
+				if (document.getText() !== canonicalContent) {
+					await this.replaceText(canonicalContent, { startLine: 0, endLine: document.lineCount }, undefined)
+				}
+
+				if (document.isDirty) {
+					await document.save()
+					return true
+				}
+			} catch (error) {
+				if (!this.shouldContinueAfterProjectionError(error)) {
+					throw error
+				}
+			}
+		}
+
+		if (!canSavePromptSkillCanonicalContentWithoutDiffEditor()) {
 			return false
 		}
-		await this.activeDiffEditor.document.save()
-		return true
+
+		// PromptSkill: if Theia closed or invalidated the diff editor, save the
+		// canonical edit model directly so file tools do not depend on an open tab.
+		return await this.writeCanonicalContentToDisk()
 	}
 
 	protected async closeAllDiffViews(): Promise<void> {
@@ -264,6 +365,8 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 			this.notebookDiffView = undefined
 		}
 
+		this.activeDiffDocumentChangeDisposable?.dispose()
+		this.activeDiffDocumentChangeDisposable = undefined
 		this.activeDiffEditor = undefined
 		this.fadedOverlayController = undefined
 		this.activeLineController = undefined
@@ -296,6 +399,27 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		// Default: open as text
 		await vscode.window.showTextDocument(uri, { preview: false })
+	}
+
+	protected override async persistCanonicalContentAfterProjectionError(): Promise<void> {
+		if (!isPromptSkillWorkspace()) {
+			return
+		}
+
+		await this.writeCanonicalContentToDisk()
+	}
+
+	private async savePromptSkillLiveDocument(document: vscode.TextDocument): Promise<void> {
+		if (!document.isDirty) {
+			return
+		}
+
+		// PromptSkill: candidate app previews watch real workspace files, so live
+		// diff updates are saved immediately while originalContent remains the
+		// revert source if the candidate rejects the change. A hard extension or
+		// process crash before reject can leave the live proposal on disk; keeping
+		// preview accurate is the product tradeoff for candidate workspaces.
+		await document.save()
 	}
 }
 

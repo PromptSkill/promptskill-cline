@@ -25,7 +25,10 @@ export abstract class DiffViewProvider {
 	protected absolutePath?: string
 	protected fileEncoding = "utf8"
 	private streamedLines: string[] = []
-	private newContent?: string
+	// PromptSkill: the edit model is the source of truth because Theia can dispose
+	// the live diff editor while a candidate is still approving or reviewing edits.
+	private proposedContent?: string
+	private canonicalContent?: string
 
 	constructor() {}
 
@@ -63,6 +66,18 @@ export abstract class DiffViewProvider {
 		this.isEditing = true
 		await this.scrollEditorToLine(0)
 		this.streamedLines = []
+	}
+
+	async reopenDiffView(): Promise<boolean> {
+		if (!this.isEditing) {
+			return false
+		}
+
+		// PromptSkill: candidate chat exposes a side-effect-only "View Changes"
+		// action that should reveal the pending live diff without answering approval.
+		await this.openDiffEditor()
+		await this.scrollToFirstDiff()
+		return true
 	}
 
 	/**
@@ -157,7 +172,7 @@ export abstract class DiffViewProvider {
 	}
 
 	/**
-	 * Save the contents of the diff editor UI to the file.
+	 * Save the canonical edit content to the file.
 	 *
 	 * @returns true if the file was saved.
 	 */
@@ -227,7 +242,8 @@ export abstract class DiffViewProvider {
 			accumulatedContent = accumulatedContent.slice(1) // Remove the BOM character
 		}
 
-		this.newContent = accumulatedContent
+		this.proposedContent = accumulatedContent
+		this.canonicalContent = accumulatedContent
 		const accumulatedLines = accumulatedContent.split("\n")
 		if (!isFinal) {
 			accumulatedLines.pop() // remove the last partial line only if it's not the final update
@@ -256,31 +272,46 @@ export abstract class DiffViewProvider {
 			const endLine = isFinal ? await this.getDocumentLineCount() : currentLine + 1
 
 			const rangeToReplace = { startLine: 0, endLine }
-			const replaceStartedAt = Date.now()
-			await this.replaceText(contentToReplace, rangeToReplace, currentLine)
-			const replaceDurationMs = Date.now() - replaceStartedAt
+			let replaceDurationMs = 0
+			let scrollDurationMs = 0
+			let projectionUpdated = false
 
-			// Scroll to the actual change location if provided.
-			const scrollStartedAt = Date.now()
-			if (changeLocation) {
-				// We have the actual location of the change, scroll to it
-				const targetLine = changeLocation.startLine
-				await this.scrollEditorToLine(targetLine)
-			} else {
-				// Fallback to the old logic for non-replacement updates
-				if (diffLines.length <= 5) {
-					// For small changes, just jump directly to the line
-					await this.scrollEditorToLine(currentLine)
+			try {
+				const replaceStartedAt = Date.now()
+				await this.replaceText(contentToReplace, rangeToReplace, currentLine)
+				replaceDurationMs = Date.now() - replaceStartedAt
+				projectionUpdated = true
+
+				// Scroll to the actual change location if provided.
+				const scrollStartedAt = Date.now()
+				if (changeLocation) {
+					// We have the actual location of the change, scroll to it
+					const targetLine = changeLocation.startLine
+					await this.scrollEditorToLine(targetLine)
 				} else {
-					// For larger changes, create a quick scrolling animation
-					const startLine = this.streamedLines.length
-					const endLine = currentLine
-					await this.scrollAnimation(startLine, endLine)
-					// Ensure we end at the final line
-					await this.scrollEditorToLine(currentLine)
+					// Fallback to the old logic for non-replacement updates
+					if (diffLines.length <= 5) {
+						// For small changes, just jump directly to the line
+						await this.scrollEditorToLine(currentLine)
+					} else {
+						// For larger changes, create a quick scrolling animation
+						const startLine = this.streamedLines.length
+						const endLine = currentLine
+						await this.scrollAnimation(startLine, endLine)
+						// Ensure we end at the final line
+						await this.scrollEditorToLine(currentLine)
+					}
 				}
+				scrollDurationMs = Date.now() - scrollStartedAt
+			} catch (error) {
+				// PromptSkill: hosts can treat the visible editor as a lossy projection;
+				// candidate workspaces must still be able to save canonical edit content.
+				if (!this.shouldContinueAfterProjectionError(error)) {
+					throw error
+				}
+				await this.persistCanonicalContentAfterProjectionError()
 			}
-			const scrollDurationMs = Date.now() - scrollStartedAt
+
 			this.logPromptSkillUpdateTiming("updated_document", {
 				isFinal,
 				relPath: this.relPath,
@@ -289,6 +320,7 @@ export abstract class DiffViewProvider {
 				currentLine,
 				endLine,
 				diffLineCount: diffLines.length,
+				projectionUpdated,
 				replaceDurationMs,
 				scrollDurationMs,
 				durationMs: Date.now() - updateStartedAt,
@@ -299,7 +331,16 @@ export abstract class DiffViewProvider {
 		this.streamedLines = accumulatedLines
 		if (isFinal) {
 			// Handle any remaining lines if the new content is shorter than the original
-			await this.safelyTruncateDocument(this.streamedLines.length)
+			try {
+				await this.safelyTruncateDocument(this.streamedLines.length)
+			} catch (error) {
+				// PromptSkill: final truncation is still part of the live projection;
+				// canonical edit content should remain saveable if the projection is gone.
+				if (!this.shouldContinueAfterProjectionError(error)) {
+					throw error
+				}
+				await this.persistCanonicalContentAfterProjectionError()
+			}
 			// Allow subclasses to perform cleanup (e.g., clearing decorations)
 			await this.onFinalUpdate()
 			// Switch to specialized editor for specific file types (e.g., Jupyter notebooks)
@@ -345,6 +386,51 @@ export abstract class DiffViewProvider {
 		currentLine: number | undefined,
 	): Promise<void>
 
+	protected shouldContinueAfterProjectionError(error: unknown): boolean {
+		Logger.warn("Diff projection update failed:", error)
+		return false
+	}
+
+	protected async persistCanonicalContentAfterProjectionError(): Promise<void> {
+		// Default no-op. Host implementations can persist canonical edit content
+		// when their visible diff editor becomes unavailable.
+	}
+
+	protected getCanonicalContent(): string | undefined {
+		return this.canonicalContent
+	}
+
+	protected async getPreSaveContent(): Promise<string | undefined> {
+		return await this.getDocumentText()
+	}
+
+	protected setCanonicalContentFromProjection(content: string): void {
+		if (!this.isEditing) {
+			return
+		}
+
+		this.canonicalContent = content
+	}
+
+	protected async writeCanonicalContentToDisk(): Promise<boolean> {
+		if (!this.absolutePath || this.canonicalContent === undefined) {
+			return false
+		}
+
+		this.createdDirs = await createDirectoriesForFile(this.absolutePath)
+		await fs.writeFile(this.absolutePath, iconv.encode(this.canonicalContent, this.fileEncoding))
+		return true
+	}
+
+	private async readSavedFileContent(): Promise<string | undefined> {
+		if (!this.absolutePath) {
+			return undefined
+		}
+
+		const fileBuffer = await fs.readFile(this.absolutePath)
+		return iconv.decode(fileBuffer, this.fileEncoding)
+	}
+
 	/**
 	 * Checks if the current file is a Jupyter notebook file.
 	 *
@@ -370,9 +456,10 @@ export abstract class DiffViewProvider {
 		finalContent: string | undefined
 	}> {
 		// get the contents before save operation which may do auto-formatting
-		const preSaveContent = await this.getDocumentText()
+		const preSaveContent = await this.getPreSaveContent()
+		const proposedContent = this.proposedContent
 
-		if (!this.relPath || !this.absolutePath || !this.newContent || preSaveContent === undefined) {
+		if (!this.relPath || !this.absolutePath || proposedContent === undefined || preSaveContent === undefined) {
 			return {
 				newProblemsMessage: undefined,
 				userEdits: undefined,
@@ -383,7 +470,7 @@ export abstract class DiffViewProvider {
 
 		await this.saveDocument()
 		// get text after save in case there is any auto-formatting done by the editor
-		const postSaveContent = (await this.getDocumentText()) || ""
+		const postSaveContent = (await this.readSavedFileContent()) || ""
 
 		await this.showFile(this.absolutePath)
 		await this.closeAllDiffViews()
@@ -393,11 +480,11 @@ export abstract class DiffViewProvider {
 			newProblems.length > 0 ? `\n\nNew problems detected after saving the file:\n${newProblems}` : ""
 
 		// If the edited content has different EOL characters, we don't want to show a diff with all the EOL differences.
-		const newContentEOL = this.newContent.includes("\r\n") ? "\r\n" : "\n"
+		const newContentEOL = proposedContent.includes("\r\n") ? "\r\n" : "\n"
 		const normalizedPreSaveContent = preSaveContent.replace(/\r\n|\n/g, newContentEOL).trimEnd() + newContentEOL // trimEnd to fix issue where editor adds in extra new line automatically
 		const normalizedPostSaveContent = postSaveContent.replace(/\r\n|\n/g, newContentEOL).trimEnd() + newContentEOL // this is the final content we return to the model to use as the new baseline for future edits
 		// just in case the new content has a mix of varying EOL characters
-		const normalizedNewContent = this.newContent.replace(/\r\n|\n/g, newContentEOL).trimEnd() + newContentEOL
+		const normalizedNewContent = proposedContent.replace(/\r\n|\n/g, newContentEOL).trimEnd() + newContentEOL
 
 		let userEdits: string | undefined
 		if (normalizedPreSaveContent !== normalizedNewContent) {
@@ -459,9 +546,17 @@ export abstract class DiffViewProvider {
 			// revert document
 			// Apply the edit and save, since contents shouldn't have changed this won't show in local history unless of
 			// course the user made changes and saved during the edit.
-			const contents = (await this.getDocumentText()) || ""
+			const contents = this.canonicalContent || ""
 			const lineCount = (contents.match(/\n/g) || []).length + 1
-			await this.replaceText(this.originalContent ?? "", { startLine: 0, endLine: lineCount }, undefined)
+			this.setCanonicalContentFromProjection(this.originalContent ?? "")
+
+			try {
+				await this.replaceText(this.originalContent ?? "", { startLine: 0, endLine: lineCount }, undefined)
+			} catch (error) {
+				if (!this.shouldContinueAfterProjectionError(error)) {
+					throw error
+				}
+			}
 
 			await this.saveDocument()
 			Logger.log(`File ${this.absolutePath} has been reverted to its original content.`)
@@ -512,7 +607,8 @@ export abstract class DiffViewProvider {
 		}
 
 		this.isEditing = false
-		this.newContent = undefined
+		this.proposedContent = undefined
+		this.canonicalContent = undefined
 	}
 
 	// close editor if open?
@@ -529,7 +625,8 @@ export abstract class DiffViewProvider {
 
 		this.streamedLines = []
 		this.createdDirs = []
-		this.newContent = undefined
+		this.proposedContent = undefined
+		this.canonicalContent = undefined
 		this.lastUpdateContentLength = -1
 		this.lastUpdateTime = 0
 

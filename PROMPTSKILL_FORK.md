@@ -21,8 +21,12 @@ PromptSkill maintains this fork as an upstream-first fork of `cline/cline`.
   file changes should go through `replace_in_file` or `write_to_file` so Cline can track and display them.
 - PromptSkill removes and ignores `attempt_completion.command` because candidate workspaces already manage preview/dev
   server access, and post-completion commands can unnecesserily repeat verification work after the task appears complete.
-- PromptSkill/Theia live-diff handling uses direct active-editor edits for streamed diff updates where upstream uses
-  workspace-level edits, because Theia's `workspace.applyEdit` path can delay candidate feedback.
+- PromptSkill/Theia live-diff handling keeps Cline's canonical edit content as the tool source of truth while
+  saving live diff edits to the real workspace file so candidate app previews update before approval. Candidate
+  edits made in the diff editor sync back into canonical edit content, file saves continue if the diff editor is
+  closed or disposed, and the chat can reopen the live diff without answering the pending approval. This intentionally
+  accepts that a hard extension/process crash before reject can leave the live proposal on disk, because candidate
+  preview accuracy during editing is more important for the hosted assessment flow.
 - PromptSkill edit/diff resource diagnostics are gated behind `CLINE_DEBUG_LOGGING=true` to avoid output-channel and
   resource-snapshot overhead during normal candidate streaming.
 - Candidate-mode telemetry and Cline SaaS error-provider suppression.
