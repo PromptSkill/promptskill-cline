@@ -14,6 +14,7 @@
 
 import { ClineTempManager } from "@services/temp"
 import * as fs from "fs"
+import { stripAnsi } from "../ansiUtils"
 import { BACKGROUND_COMMAND_TIMEOUT_MS, DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT } from "../constants"
 import type { BackgroundCommand, ITerminalManager, TerminalInfo, TerminalProcessResultPromise } from "../types"
 import { StandaloneTerminalProcess } from "./StandaloneTerminalProcess"
@@ -434,6 +435,7 @@ export class StandaloneTerminalManager implements ITerminalManager {
 
 		// Pipe future process output to log file
 		process.on("line", (line: string) => {
+			line = stripAnsi(line)
 			backgroundCommand.lineCount++
 			logStream.write(line + "\n")
 		})

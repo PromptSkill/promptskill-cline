@@ -24,11 +24,22 @@ PromptSkill maintains this fork as an upstream-first fork of `cline/cline`.
 - PromptSkill/Theia live-diff handling keeps Cline's canonical edit content as the tool source of truth while
   saving live diff edits to the real workspace file so candidate app previews update before approval. Candidate
   edits made in the diff editor sync back into canonical edit content, file saves continue if the diff editor is
-  closed or disposed, and the chat can reopen the live diff without answering the pending approval. This intentionally
-  accepts that a hard extension/process crash before reject can leave the live proposal on disk, because candidate
-  preview accuracy during editing is more important for the hosted assessment flow.
+  closed or disposed, and the chat can reopen the live diff without answering the pending approval. Streaming edits
+  auto-reveal the current change until the candidate manually scrolls up in the diff editor; clicking View Changes
+  or manually scrolling back near the bottom resumes auto-reveal for the active proposal. This intentionally accepts
+  that a hard extension/process crash before reject can leave the live proposal on disk, because candidate preview
+  accuracy during editing is more important for the hosted assessment flow.
 - PromptSkill edit/diff resource diagnostics are gated behind `CLINE_DEBUG_LOGGING=true` to avoid output-channel and
   resource-snapshot overhead during normal candidate streaming.
+- Candidate chat UI adds PromptSkill-specific affordances for hosted assessments: visible chat scrolling, compact
+  prompt expand/collapse text, right-click Copy for chat messages, hidden per-message cost badges, and pending-edit
+  guidance/View Changes controls near affected files. Chat message rows rely on a stable native scrollbar gutter for
+  most right-side spacing so the visible scrollbar does not push the message column out of alignment.
+- Candidate webview startup is kept chat-first: PromptSkill keeps a lightweight candidate home/history-preview
+  screen in the chat path, lazy-loads full upstream optional surfaces such as full history, settings/model picker,
+  MCP, account/auth, worktrees, onboarding/welcome marketing, browser-message rendering, checkpoints, rules
+  controls, auto-approve UI, telemetry, and provider catalog/pricing code, and skips startup refreshes for hidden
+  MCP/model/telemetry surfaces.
 - Candidate-mode telemetry and Cline SaaS error-provider suppression.
 - Theia secret-storage shim for runtime environments where the default VS Code secret storage path fails.
 - Candidate UI restrictions that hide or lock settings not intended for assessments.

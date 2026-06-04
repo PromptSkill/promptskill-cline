@@ -1,8 +1,8 @@
 import { TerminalOutputFailureReason, telemetryService } from "@services/telemetry"
 import { EventEmitter } from "events"
 import * as vscode from "vscode"
-import { stripAnsi } from "@/hosts/vscode/terminal/ansiUtils"
 import { getLatestTerminalOutput } from "@/hosts/vscode/terminal/get-latest-output"
+import { stripAnsi } from "@/integrations/terminal/ansiUtils"
 import {
 	isCompilingOutput,
 	MAX_FULL_OUTPUT_SIZE,

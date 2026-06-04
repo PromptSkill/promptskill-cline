@@ -2,10 +2,11 @@ import { ClineMessage } from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
-import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { promptSkillChatCopyScopeProps, shouldShowClineCostMetadata } from "@/integrations/promptskill/policy"
 import { cn } from "@/lib/utils"
 import { getEnvironmentColor } from "@/utils/environmentColors"
+import { useChatModelSelection } from "../chatModelSelection"
 import CopyTaskButton from "./buttons/CopyTaskButton"
 import DeleteTaskButton from "./buttons/DeleteTaskButton"
 import NewTaskButton from "./buttons/NewTaskButton"
@@ -31,7 +32,9 @@ interface TaskHeaderProps {
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
 }
 
-const BUTTON_CLASS = "max-h-3 border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
+const BUTTON_CLASS = "h-6 border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
+const PROMPT_TOGGLE_CLASS =
+	"min-h-6 cursor-pointer rounded-xs border-0 bg-transparent px-1.5 py-1 text-foreground hover:bg-toolbar-hover hover:opacity-100 text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap"
 
 const TaskHeader: React.FC<TaskHeaderProps> = ({
 	task,
@@ -53,6 +56,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		focusChainSettings,
 		navigateToSettings,
 		mode,
+		isPromptSkillWorkspace,
 		expandTaskHeader: isTaskExpanded,
 		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
@@ -90,21 +94,31 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	}, [isHighlightedTextExpanded])
 
 	// Simplified computed values
-	const { selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, mode)
-	const modeFields = getModeSpecificFields(apiConfiguration, mode)
+	const { modeFields, selectedModelInfo } = useChatModelSelection(apiConfiguration, mode, isPromptSkillWorkspace)
+	// PromptSkill: hosted assessments hide Cline cost metadata and use scoped copy targets.
+	const shouldShowCostMetadata = shouldShowClineCostMetadata(isPromptSkillWorkspace)
+	const promptSkillCopyScopeProps = promptSkillChatCopyScopeProps(isPromptSkillWorkspace, task.text)
 
 	const isCostAvailable =
-		(totalCost &&
+		shouldShowCostMetadata &&
+		((totalCost &&
 			modeFields.apiProvider === "openai" &&
 			modeFields.openAiModelInfo?.inputPrice &&
 			modeFields.openAiModelInfo?.outputPrice) ||
-		(modeFields.apiProvider !== "vscode-lm" &&
-			modeFields.apiProvider !== "ollama" &&
-			modeFields.apiProvider !== "lmstudio" &&
-			modeFields.apiProvider !== "openai-codex") // Subscription-based, no per-token costs
+			(modeFields.apiProvider !== "vscode-lm" &&
+				modeFields.apiProvider !== "ollama" &&
+				modeFields.apiProvider !== "lmstudio" &&
+				modeFields.apiProvider !== "openai-codex")) // Subscription-based, no per-token costs
 
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
+	const handlePromptToggleClick = useCallback(
+		(event: React.MouseEvent) => {
+			event.stopPropagation()
+			toggleTaskExpanded()
+		},
+		[toggleTaskExpanded],
+	)
 
 	const handleCheckpointSettingsClick = useCallback(() => {
 		navigateToSettings("features")
@@ -130,13 +144,18 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				)}
 				style={{
 					borderColor: environmentBorderColor,
-				}}>
+				}}
+				{...promptSkillCopyScopeProps}>
 				{/* Task Title */}
 				<div
 					aria-label={isTaskExpanded ? "Collapse task header" : "Expand task header"}
 					className="flex justify-between items-center cursor-pointer"
 					onClick={toggleTaskExpanded}
 					onKeyDown={(e) => {
+						if ((e.target as HTMLElement).closest("button")) {
+							return
+						}
+
 						if (e.key === "Enter" || e.key === " ") {
 							e.preventDefault()
 							e.stopPropagation()
@@ -145,9 +164,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 					}}
 					tabIndex={0}>
 					<div className="flex justify-between items-center">
-						{isTaskExpanded ? <ChevronDownIcon size="16" /> : <ChevronRightIcon size="16" />}
 						{isTaskExpanded && (
-							<div className="mt-1 flex justify-end cursor-pointer opacity-80 gap-2 mx-2">
+							<div className="flex h-6 items-center justify-end cursor-pointer opacity-80 gap-2 mx-2">
 								<CopyTaskButton className={BUTTON_CLASS} taskText={task.text} />
 								<DeleteTaskButton
 									className={BUTTON_CLASS}
@@ -158,6 +176,14 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 								{IS_DEV && (
 									<OpenDiskConversationHistoryButton className={BUTTON_CLASS} taskId={currentTaskItem?.id} />
 								)}
+								<button
+									aria-label="Collapse prompt"
+									className={PROMPT_TOGGLE_CLASS}
+									onClick={handlePromptToggleClick}
+									type="button">
+									<span>Collapse prompt</span>
+									<ChevronDownIcon size="14" />
+								</button>
 							</div>
 						)}
 					</div>
@@ -169,6 +195,16 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						)}
 					</div>
 					<div className="inline-flex items-center justify-end select-none shrink-0">
+						{!isTaskExpanded && (
+							<button
+								aria-label="Show full prompt"
+								className={`${PROMPT_TOGGLE_CLASS} mr-1 opacity-80 px-1`}
+								onClick={handlePromptToggleClick}
+								type="button">
+								{/* Collapsed headers are narrow, so keep this icon-only while preserving the aria-label. */}
+								<ChevronRightIcon size="14" />
+							</button>
+						)}
 						{isCostAvailable && (
 							<div
 								className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
@@ -184,25 +220,25 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				{isTaskExpanded && (
 					<div className="flex flex-col break-words" key={`task-details-${currentTaskItem?.id}`}>
 						<div
-							className={cn(
-								"ph-no-capture whitespace-pre-wrap break-words px-0.5 text-sm mt-1 relative",
-								"max-h-[4.5rem] overflow-hidden",
-								{
-									"max-h-[25vh] overflow-y-auto scroll-smooth": isHighlightedTextExpanded,
-									"cursor-pointer": isTextOverflowing,
-								},
-							)}
+							className={cn("relative mt-1 max-h-[4.5rem] overflow-hidden", {
+								"max-h-[25vh] overflow-y-auto scroll-smooth": isHighlightedTextExpanded,
+							})}
 							onClick={() => isTextOverflowing && setIsHighlightedTextExpanded(true)}
-							ref={highlightedTextRef}
-							style={
-								!isHighlightedTextExpanded && isTextOverflowing
-									? {
-											WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)",
-											maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)",
-										}
-									: undefined
-							}>
-							{highlightedText}
+							ref={highlightedTextRef}>
+							<div
+								className={cn("ph-no-capture whitespace-pre-wrap break-words px-0.5 text-sm", {
+									"cursor-pointer": !isHighlightedTextExpanded && isTextOverflowing,
+								})}
+								style={
+									!isHighlightedTextExpanded && isTextOverflowing
+										? {
+												WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)",
+												maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)",
+											}
+										: undefined
+								}>
+								{highlightedText}
+							</div>
 						</div>
 
 						{((task.images && task.images.length > 0) || (task.files && task.files.length > 0)) && (

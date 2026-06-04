@@ -1,6 +1,7 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { memo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { shouldShowClineCostMetadata } from "@/integrations/promptskill/policy"
 import { TaskServiceClient } from "@/services/grpc-client"
 
 type HistoryPreviewProps = {
@@ -8,7 +9,9 @@ type HistoryPreviewProps = {
 }
 
 const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
-	const { taskHistory } = useExtensionState()
+	const { isPromptSkillWorkspace, taskHistory } = useExtensionState()
+	// PromptSkill: hosted assessments hide Cline cost metadata from candidates.
+	const shouldShowCostMetadata = shouldShowClineCostMetadata(isPromptSkillWorkspace)
 	const handleHistorySelect = (id: string) => {
 		TaskServiceClient.showTaskWithId(StringRequest.create({ value: id })).catch((error) =>
 			console.error("Error showing task:", error),
@@ -118,7 +121,8 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 						style={{
 							marginRight: "4px",
 							transform: "scale(0.9)",
-						}}></span>
+						}}
+					/>
 					<span
 						style={{
 							fontWeight: 500,
@@ -163,7 +167,7 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 									</div>
 									<div className="history-meta-stack">
 										<span className="history-date">{formatDate(item.ts)}</span>
-										{item.totalCost != null && (
+										{shouldShowCostMetadata && item.totalCost != null && (
 											<span className="history-cost-chip">${item.totalCost.toFixed(2)}</span>
 										)}
 									</div>

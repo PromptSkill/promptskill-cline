@@ -84,9 +84,9 @@ export default defineConfig({
 		sourcemap: isDevBuild ? "inline" : false,
 		rollupOptions: {
 			output: {
-				inlineDynamicImports: true,
 				entryFileNames: `assets/[name].js`,
-				chunkFileNames: `assets/[name].js`,
+				// PromptSkill: keep optional Cline surfaces in local chunks so candidate startup stays chat-first.
+				chunkFileNames: `assets/[name]-[hash].js`,
 				assetFileNames: `assets/[name].[ext]`,
 				// Disable compact output for dev build
 				compact: !isDevBuild,

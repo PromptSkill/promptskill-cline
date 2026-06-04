@@ -2,7 +2,6 @@ import { COMMAND_OUTPUT_STRING } from "@shared/combineCommandSequences"
 import {
 	ClineApiReqInfo,
 	ClineAskQuestion,
-	ClineAskUseMcpServer,
 	ClineMessage,
 	ClinePlanModeResponse,
 	ClineSayGenerateExplanation,
@@ -36,19 +35,18 @@ import {
 	TerminalIcon,
 	TriangleAlertIcon,
 } from "lucide-react"
-import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { lazy, MouseEvent, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
-import { CheckmarkControl } from "@/components/common/CheckmarkControl"
 import { WithCopyButton } from "@/components/common/CopyButton"
-import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
-import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
-import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { promptSkillFileActionHelperText } from "@/integrations/promptskill/policy"
+import {
+	promptSkillChatCopyScopeProps,
+	promptSkillFileActionHelperText,
+	promptSkillViewChangesActionProps,
+} from "@/integrations/promptskill/policy"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
-import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
 import { CompletionOutputRow } from "./CompletionOutputRow"
@@ -68,6 +66,12 @@ import { ThinkingRow } from "./ThinkingRow"
 import UserMessage from "./UserMessage"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
+
+const McpChatRow = lazy(() => import("./McpChatRow"))
+const McpResponseDisplay = lazy(() => import("@/components/mcp/chat-display/McpResponseDisplay"))
+const CheckmarkControl = lazy(() =>
+	import("@/components/common/CheckmarkControl").then((module) => ({ default: module.CheckmarkControl })),
+)
 
 interface ChatRowProps {
 	message: ClineMessage
@@ -101,12 +105,16 @@ const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 const ChatRow = memo(
 	(props: ChatRowProps) => {
 		const { isLast, onHeightChange, message } = props
+		const { isPromptSkillWorkspace } = useExtensionState()
+		// PromptSkill: hosted assessment assistant rows are scoped for the candidate copy menu.
+		const promptSkillCopyScopeProps = promptSkillChatCopyScopeProps(isPromptSkillWorkspace)
 		// Store the previous height to compare with the current height
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
 
 		const [chatrow, { height }] = useSize(
-			<div className="relative pt-2.5 px-4">
+			// PromptSkill: the stable message scrollbar gutter provides most right-side spacing.
+			<div className="relative pt-2.5 pl-4 pr-0.5" {...promptSkillCopyScopeProps}>
 				<ChatRowContent {...props} />
 			</div>,
 		)
@@ -330,21 +338,7 @@ export const ChatRowContent = memo(
 						<span className="font-bold text-foreground">Cline wants to execute this command:</span>,
 					]
 				case "use_mcp_server":
-					const mcpServerUse = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
-					return [
-						isMcpServerResponding ? (
-							<ProgressIndicator />
-						) : (
-							<span className="codicon codicon-server text-foreground mb-[-1.5px]" />
-						),
-						<span className="ph-no-capture font-bold text-foreground break-words">
-							Cline wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
-							<code className="break-all">
-								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
-							</code>{" "}
-							MCP server:
-						</span>,
-					]
+					return [null, null]
 				case "completion_result":
 					return [
 						<span className="codicon codicon-check text-success mb-[-1.5px]" />,
@@ -434,6 +428,13 @@ export const ChatRowContent = memo(
 			const fileActionHelper = fileActionHelperText ? (
 				<div className="text-xs text-description -mt-2 mb-3">{fileActionHelperText}</div>
 			) : null
+			// PromptSkill: keep the live-diff reopen action near the affected file
+			// instead of adding a third accept/reject action-bar button.
+			const viewChangesActionProps = promptSkillViewChangesActionProps({
+				isLast,
+				isPromptSkillWorkspace,
+				message,
+			})
 
 			switch (tool.tool) {
 				case "editedExistingFile":
@@ -454,6 +455,7 @@ export const ChatRowContent = memo(
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow
 									isLoading={message.partial}
+									{...viewChangesActionProps}
 									patch={tool.content}
 									path={tool.path}
 									startLineNumbers={tool.startLineNumbers}
@@ -463,6 +465,7 @@ export const ChatRowContent = memo(
 									// isLoading={message.partial}
 									code={tool.content}
 									isExpanded={isExpanded}
+									{...viewChangesActionProps}
 									onToggleExpand={handleToggle}
 									path={tool.path!}
 								/>
@@ -499,12 +502,18 @@ export const ChatRowContent = memo(
 							</div>
 							{fileActionHelper}
 							{backgroundEditEnabled && tool.path && tool.content ? (
-								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
+								<DiffEditRow
+									{...viewChangesActionProps}
+									patch={tool.content}
+									path={tool.path}
+									startLineNumbers={tool.startLineNumbers}
+								/>
 							) : (
 								<CodeAccordian
 									code={tool.content!}
 									isExpanded={isExpanded}
 									isLoading={message.partial}
+									{...viewChangesActionProps}
 									onToggleExpand={handleToggle}
 									path={tool.path!}
 								/>
@@ -788,64 +797,16 @@ export const ChatRowContent = memo(
 		}
 
 		if (message.ask === "use_mcp_server" || message.say === "use_mcp_server") {
-			const useMcpServer = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
-			const server = mcpServers.find((server) => server.name === useMcpServer.serverName)
 			return (
-				<div>
-					<div className={HEADER_CLASSNAMES}>
-						{icon}
-						{title}
-					</div>
-
-					<div className="bg-code rounded-xs py-2 px-2.5 mt-2">
-						{useMcpServer.type === "access_mcp_resource" && (
-							<McpResourceRow
-								item={{
-									...(findMatchingResourceOrTemplate(
-										useMcpServer.uri || "",
-										server?.resources,
-										server?.resourceTemplates,
-									) || {
-										name: "",
-										mimeType: "",
-										description: "",
-									}),
-									uri: useMcpServer.uri || "",
-								}}
-							/>
-						)}
-
-						{useMcpServer.type === "use_mcp_tool" && (
-							<div>
-								<div onClick={(e) => e.stopPropagation()}>
-									<McpToolRow
-										serverName={useMcpServer.serverName}
-										tool={{
-											name: useMcpServer.toolName || "",
-											description:
-												server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.description ||
-												"",
-											autoApprove:
-												server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.autoApprove ||
-												false,
-										}}
-									/>
-								</div>
-								{useMcpServer.arguments && useMcpServer.arguments !== "{}" && (
-									<div className="mt-2">
-										<div className="mb-1 opacity-80 uppercase">Arguments</div>
-										<CodeAccordian
-											code={useMcpServer.arguments}
-											isExpanded={true}
-											language="json"
-											onToggleExpand={handleToggle}
-										/>
-									</div>
-								)}
-							</div>
-						)}
-					</div>
-				</div>
+				<Suspense fallback={null}>
+					<McpChatRow
+						handleToggle={handleToggle}
+						isMcpServerResponding={isMcpServerResponding}
+						mcpMarketplaceCatalog={mcpMarketplaceCatalog}
+						mcpServers={mcpServers}
+						message={message}
+					/>
+				</Suspense>
 			)
 		}
 
@@ -870,7 +831,11 @@ export const ChatRowContent = memo(
 					case "api_req_finished":
 						return <InvisibleSpacer /> // we should never see this message type
 					case "mcp_server_response":
-						return <McpResponseDisplay responseText={message.text || ""} />
+						return (
+							<Suspense fallback={null}>
+								<McpResponseDisplay responseText={message.text || ""} />
+							</Suspense>
+						)
 					case "mcp_notification":
 						return (
 							<div className="flex items-start gap-2 py-2.5 px-3 bg-quote rounded-sm text-base text-foreground opacity-90 mb-2">
@@ -953,7 +918,14 @@ export const ChatRowContent = memo(
 					case "clineignore_error":
 						return <ErrorRow errorType="clineignore_error" message={message} />
 					case "checkpoint_created":
-						return <CheckmarkControl isCheckpointCheckedOut={message.isCheckpointCheckedOut} messageTs={message.ts} />
+						return (
+							<Suspense fallback={null}>
+								<CheckmarkControl
+									isCheckpointCheckedOut={message.isCheckpointCheckedOut}
+									messageTs={message.ts}
+								/>
+							</Suspense>
+						)
 					case "load_mcp_documentation":
 						return (
 							<div className="text-foreground flex items-center opacity-70 text-[12px] py-1 px-0">

@@ -110,13 +110,14 @@ export abstract class WebviewProvider {
 				<meta name="theme-color" content="#000000">
 				<link rel="stylesheet" type="text/css" href="${stylesUrl}">
 				<link href="${codiconsUrl}" rel="stylesheet" />
+				<!-- PromptSkill: local module chunks need the extension/webview origin because candidate startup lazy-loads optional Cline surfaces. -->
 				<meta http-equiv="Content-Security-Policy" content="default-src 'none';
 					connect-src https://*.posthog.com https://*.cline.bot; 
 					font-src ${this.getCspSource()} data:; 
 					style-src ${this.getCspSource()} 'unsafe-inline'; 
 					img-src ${this.getCspSource()} https: data:; 
 					media-src ${this.getCspSource()} https: data: blob:;
-					script-src 'nonce-${nonce}' 'unsafe-eval';">
+					script-src ${this.getCspSource()} 'nonce-${nonce}' 'unsafe-eval';">
 				<title>Cline</title>
 			</head>
 			<body>

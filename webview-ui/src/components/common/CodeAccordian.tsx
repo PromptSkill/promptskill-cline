@@ -15,6 +15,8 @@ interface CodeAccordianProps {
 	isExpanded: boolean
 	onToggleExpand: () => void
 	isLoading?: boolean
+	trailingActionLabel?: string
+	onTrailingAction?: () => void
 }
 
 /*
@@ -35,6 +37,8 @@ const CodeAccordian = ({
 	isExpanded,
 	onToggleExpand,
 	isLoading,
+	trailingActionLabel,
+	onTrailingAction,
 }: CodeAccordianProps) => {
 	const inferredLanguage = useMemo(
 		() => code && (language ?? (path ? getLanguageFromPath(path) : undefined)),
@@ -47,50 +51,73 @@ const CodeAccordian = ({
 		}
 		return undefined
 	}, [code])
+	const hasTrailingAction = Boolean(trailingActionLabel && onTrailingAction)
+
+	const headerContent = (
+		<>
+			{isFeedback || isConsoleLogs ? (
+				<div className="flex items-center">
+					<span className={`mr-1.5 codicon codicon-${isFeedback ? "feedback" : "output"}`} />
+					<span className="whitespace-nowrap overflow-hidden text-ellipsis mr-2">
+						{isFeedback ? "User Edits" : "Console Logs"}
+					</span>
+				</div>
+			) : (
+				<span className="whitespace-nowrap overflow-hidden text-ellipsis mr-2 [direction: rtl] text-left">
+					{path?.startsWith(".") && <span>.</span>}
+					{path && !path.startsWith(".") && <span>/</span>}
+					{cleanPathPrefix(path ?? "") + "\u200E"}
+				</span>
+			)}
+			<div className="grow" />
+			{numberOfEdits !== undefined && (
+				<div className="flex items-center mr-2 text-description">
+					<span className="codicon codicon-diff-single mr-1" />
+					<span>{numberOfEdits}</span>
+				</div>
+			)}
+			{!hasTrailingAction &&
+				(isExpanded ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />)}
+		</>
+	)
 
 	return (
 		<div className="bg-code overflow-hidden rounded-xs border border-editor-group-border">
 			{(path || isFeedback || isConsoleLogs) && (
-				<Button
-					aria-label={isExpanded ? "Collapse code block" : "Expand code block"}
-					className={cn("text-description flex items-center cursor-pointer select-none w-full py-[9px] px-2.5", {
-						"cursor-wait opacity-70": isLoading,
-					})}
-					onClick={isLoading ? undefined : onToggleExpand}
-					onKeyDown={(e) => {
-						if (!isLoading) {
-							e.preventDefault()
-							if (e.key === "Enter" || e.key === " ") {
-								e.stopPropagation()
-								onToggleExpand()
+				<div className="flex items-stretch">
+					<Button
+						aria-label={isExpanded ? "Collapse code block" : "Expand code block"}
+						className={cn(
+							"text-description flex items-center cursor-pointer select-none flex-1 min-w-0 py-[9px] px-2.5",
+							{
+								"cursor-wait opacity-70": isLoading,
+							},
+						)}
+						onClick={isLoading ? undefined : onToggleExpand}
+						onKeyDown={(e) => {
+							if (!isLoading) {
+								e.preventDefault()
+								if (e.key === "Enter" || e.key === " ") {
+									e.stopPropagation()
+									onToggleExpand()
+								}
 							}
-						}
-					}}
-					tabIndex={0}
-					variant="text">
-					{isFeedback || isConsoleLogs ? (
-						<div className="flex items-center">
-							<span className={`mr-1.5 codicon codicon-${isFeedback ? "feedback" : "output"}`} />
-							<span className="whitespace-nowrap overflow-hidden text-ellipsis mr-2">
-								{isFeedback ? "User Edits" : "Console Logs"}
-							</span>
-						</div>
-					) : (
-						<span className="whitespace-nowrap overflow-hidden text-ellipsis mr-2 [direction: rtl] text-left">
-							{path?.startsWith(".") && <span>.</span>}
-							{path && !path.startsWith(".") && <span>/</span>}
-							{cleanPathPrefix(path ?? "") + "\u200E"}
-						</span>
+						}}
+						tabIndex={0}
+						variant="text">
+						{headerContent}
+					</Button>
+					{hasTrailingAction && (
+						<Button
+							aria-label={trailingActionLabel}
+							className="shrink-0 cursor-pointer select-none border-l border-editor-group-border bg-toolbar-hover/50 px-2.5 py-[9px] text-description hover:bg-toolbar-hover hover:text-foreground active:bg-toolbar-hover/80"
+							onClick={onTrailingAction}
+							variant="text">
+							<span>{trailingActionLabel}</span>
+							<ChevronRightIcon className="size-3" />
+						</Button>
 					)}
-					<div className="grow" />
-					{numberOfEdits !== undefined && (
-						<div className="flex items-center mr-2 text-description">
-							<span className="codicon codicon-diff-single mr-1" />
-							<span>{numberOfEdits}</span>
-						</div>
-					)}
-					{isExpanded ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
-				</Button>
+				</div>
 			)}
 			{(!(path || isFeedback || isConsoleLogs) || isExpanded) && (
 				<div className="overflow-x-auto overflow-y-hidden max-w-full">

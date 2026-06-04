@@ -16,7 +16,6 @@ const PROMPTSKILL_FEATURE_TIP_TEXTS = new Set([
 	"Use /compact to condense long conversations and free up context window space.",
 	"Use the quote button to select text from Cline's response and reference it in your reply.",
 	"You can drag and drop images into the chat to share screenshots with Cline.",
-	"Cline can browse websites — ask it to test your local dev server in the browser.",
 ])
 
 const FEATURE_TIPS: FeatureTipItem[] = [

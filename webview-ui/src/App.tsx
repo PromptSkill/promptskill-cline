@@ -1,23 +1,29 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/cline/common"
-import { useCallback, useEffect, useState } from "react"
-import AccountView from "./components/account/AccountView"
+import { lazy, Suspense, useCallback, useEffect, useState } from "react"
 import ChatView from "./components/chat/ChatView"
-import ClineKanbanLaunchModal, { CLINE_KANBAN_MODAL_DISMISS_ID } from "./components/common/ClineKanbanLaunchModal"
-import HistoryView from "./components/history/HistoryView"
-import McpView from "./components/mcp/configuration/McpConfigurationView"
-import OnboardingView from "./components/onboarding/OnboardingView"
-import SettingsView from "./components/settings/SettingsView"
-import WelcomeView from "./components/welcome/WelcomeView"
-import WorktreesView from "./components/worktrees/WorktreesView"
-import { useClineAuth } from "./context/ClineAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import {
+	shouldShowClineAccountControls,
 	shouldShowClineKanbanModal,
+	shouldShowClineMarketingBanners,
 	shouldShowClineMcpControls,
 	shouldShowClineSettings,
+	shouldShowClineWelcomeSurfaces,
+	shouldShowClineWorktreeControls,
 } from "./integrations/promptskill/policy"
 import { Providers } from "./Providers"
 import { StateServiceClient, UiServiceClient } from "./services/grpc-client"
+
+const AccountViewWithAuth = lazy(() => import("./components/account/AccountViewWithAuth"))
+const ClineKanbanLaunchModal = lazy(() => import("./components/common/ClineKanbanLaunchModal"))
+const HistoryView = lazy(() => import("./components/history/HistoryView"))
+const McpView = lazy(() => import("./components/mcp/configuration/McpConfigurationView"))
+const OnboardingView = lazy(() => import("./components/onboarding/OnboardingView"))
+const SettingsView = lazy(() => import("./components/settings/SettingsView"))
+const WelcomeView = lazy(() => import("./components/welcome/WelcomeView"))
+const WorktreesView = lazy(() => import("./components/worktrees/WorktreesView"))
+
+const CLINE_KANBAN_MODAL_DISMISS_ID = "cline-kanban-launch-modal-v1"
 
 const AppContent = () => {
 	const {
@@ -48,8 +54,6 @@ const AppContent = () => {
 	const [showKanbanModal, setShowKanbanModal] = useState(false)
 	const [hasShownKanbanModal, setHasShownKanbanModal] = useState(false)
 
-	const { clineUser, organizations, activeOrganization } = useClineAuth()
-
 	const showUpdateAnnouncementModal = useCallback(() => {
 		setShowAnnouncement(true)
 		UiServiceClient.onDidShowAnnouncement({} as EmptyRequest)
@@ -79,6 +83,10 @@ const AppContent = () => {
 
 	// Keep update announcements queued until the Kanban modal has either shown and closed or been skipped.
 	useEffect(() => {
+		// PromptSkill: candidate workspaces skip upstream release and marketing surfaces.
+		if (!shouldShowClineMarketingBanners(isPromptSkillWorkspace)) {
+			return
+		}
 		if (!didHydrateState || showWelcome || !shouldShowAnnouncement || showAnnouncement) {
 			return
 		}
@@ -95,6 +103,7 @@ const AppContent = () => {
 		showKanbanModal,
 		hasShownKanbanModal,
 		showUpdateAnnouncementModal,
+		isPromptSkillWorkspace,
 	])
 
 	const handleCloseKanbanModal = useCallback((doNotShowAgain: boolean) => {
@@ -110,33 +119,36 @@ const AppContent = () => {
 		return null
 	}
 
-	if (showWelcome) {
-		return onboardingModels ? <OnboardingView onboardingModels={onboardingModels} /> : <WelcomeView />
+	if (showWelcome && shouldShowClineWelcomeSurfaces(isPromptSkillWorkspace)) {
+		return (
+			<Suspense fallback={null}>
+				{onboardingModels ? <OnboardingView onboardingModels={onboardingModels} /> : <WelcomeView />}
+			</Suspense>
+		)
 	}
 
 	// PromptSkill: candidate workspaces receive locked runtime configuration from the backend.
 	const isSettingsVisible = showSettings && shouldShowClineSettings(isPromptSkillWorkspace)
 	const isMcpVisible = showMcp && shouldShowClineMcpControls(isPromptSkillWorkspace)
+	const isAccountVisible = showAccount && shouldShowClineAccountControls(isPromptSkillWorkspace)
+	const isWorktreesVisible = showWorktrees && shouldShowClineWorktreeControls(isPromptSkillWorkspace)
 
 	return (
 		<div className="flex h-screen w-full flex-col">
-			<ClineKanbanLaunchModal onClose={handleCloseKanbanModal} open={showKanbanModal} />
-			{isSettingsVisible && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-			{showHistory && <HistoryView onDone={hideHistory} />}
-			{isMcpVisible && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-			{showAccount && (
-				<AccountView
-					activeOrganization={activeOrganization}
-					clineUser={clineUser}
-					onDone={hideAccount}
-					organizations={organizations}
-				/>
-			)}
-			{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
+			<Suspense fallback={null}>
+				{showKanbanModal && shouldShowClineKanbanModal(isPromptSkillWorkspace) && (
+					<ClineKanbanLaunchModal onClose={handleCloseKanbanModal} open={showKanbanModal} />
+				)}
+				{isSettingsVisible && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
+				{showHistory && <HistoryView onDone={hideHistory} />}
+				{isMcpVisible && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
+				{isAccountVisible && <AccountViewWithAuth onDone={hideAccount} />}
+				{isWorktreesVisible && <WorktreesView onDone={hideWorktrees} />}
+			</Suspense>
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
-				isHidden={isSettingsVisible || showHistory || isMcpVisible || showAccount || showWorktrees}
+				isHidden={isSettingsVisible || showHistory || isMcpVisible || isAccountVisible || isWorktreesVisible}
 				showAnnouncement={showAnnouncement}
 				showHistoryView={navigateToHistory}
 			/>

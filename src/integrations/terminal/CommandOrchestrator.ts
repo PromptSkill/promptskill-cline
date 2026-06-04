@@ -21,6 +21,7 @@ import { ClineTempManager } from "@services/temp"
 import { COMMAND_CANCEL_TOKEN } from "@shared/ExtensionMessage"
 import * as fs from "fs"
 import { Logger } from "@/shared/services/Logger"
+import { stripAnsi } from "./ansiUtils"
 import {
 	BUFFER_STUCK_TIMEOUT_MS,
 	CHUNK_BYTE_SIZE,
@@ -366,6 +367,8 @@ export async function orchestrateCommandExecution(
 
 	const outputLines: string[] = []
 	process.on("line", async (line: string) => {
+		line = stripAnsi(line)
+
 		if (didCancelViaUi) {
 			return
 		}

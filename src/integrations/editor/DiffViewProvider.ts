@@ -282,27 +282,29 @@ export abstract class DiffViewProvider {
 				replaceDurationMs = Date.now() - replaceStartedAt
 				projectionUpdated = true
 
-				// Scroll to the actual change location if provided.
-				const scrollStartedAt = Date.now()
-				if (changeLocation) {
-					// We have the actual location of the change, scroll to it
-					const targetLine = changeLocation.startLine
-					await this.scrollEditorToLine(targetLine)
-				} else {
-					// Fallback to the old logic for non-replacement updates
-					if (diffLines.length <= 5) {
-						// For small changes, just jump directly to the line
-						await this.scrollEditorToLine(currentLine)
+				if (this.shouldAutoRevealStreamedUpdate()) {
+					// Scroll to the actual change location if provided.
+					const scrollStartedAt = Date.now()
+					if (changeLocation) {
+						// We have the actual location of the change, scroll to it
+						const targetLine = changeLocation.startLine
+						await this.scrollEditorToLine(targetLine)
 					} else {
-						// For larger changes, create a quick scrolling animation
-						const startLine = this.streamedLines.length
-						const endLine = currentLine
-						await this.scrollAnimation(startLine, endLine)
-						// Ensure we end at the final line
-						await this.scrollEditorToLine(currentLine)
+						// Fallback to the old logic for non-replacement updates
+						if (diffLines.length <= 5) {
+							// For small changes, just jump directly to the line
+							await this.scrollEditorToLine(currentLine)
+						} else {
+							// For larger changes, create a quick scrolling animation
+							const startLine = this.streamedLines.length
+							const endLine = currentLine
+							await this.scrollAnimation(startLine, endLine)
+							// Ensure we end at the final line
+							await this.scrollEditorToLine(currentLine)
+						}
 					}
+					scrollDurationMs = Date.now() - scrollStartedAt
 				}
-				scrollDurationMs = Date.now() - scrollStartedAt
 			} catch (error) {
 				// PromptSkill: hosts can treat the visible editor as a lossy projection;
 				// candidate workspaces must still be able to save canonical edit content.
@@ -394,6 +396,14 @@ export abstract class DiffViewProvider {
 	protected async persistCanonicalContentAfterProjectionError(): Promise<void> {
 		// Default no-op. Host implementations can persist canonical edit content
 		// when their visible diff editor becomes unavailable.
+	}
+
+	/**
+	 * Controls viewport-follow behavior only; streamed edit content is still
+	 * projected and saved even when a host decides not to reveal the latest line.
+	 */
+	protected shouldAutoRevealStreamedUpdate(): boolean {
+		return true
 	}
 
 	protected getCanonicalContent(): string | undefined {

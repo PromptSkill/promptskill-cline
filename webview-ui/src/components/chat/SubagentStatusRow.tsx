@@ -16,6 +16,8 @@ import {
 	NetworkIcon,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { shouldShowClineCostMetadata } from "@/integrations/promptskill/policy"
 import MarkdownBlock from "../common/MarkdownBlock"
 
 interface SubagentStatusRowProps {
@@ -178,9 +180,12 @@ function SubagentPromptText({ prompt, isExpanded, onShowMore }: SubagentPromptTe
 }
 
 export default function SubagentStatusRow({ message, isLast, lastModifiedMessage }: SubagentStatusRowProps) {
+	const { isPromptSkillWorkspace } = useExtensionState()
 	const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({})
 	const [expandedPrompts, setExpandedPrompts] = useState<Record<number, boolean>>({})
 	const data = useMemo(() => parseSubagentRowData(message), [message])
+	// PromptSkill: hosted assessments hide Cline cost metadata from candidates.
+	const shouldShowCostMetadata = shouldShowClineCostMetadata(isPromptSkillWorkspace)
 
 	if (!data) {
 		return <div className="text-foreground opacity-80">Subagent status update unavailable.</div>
@@ -229,7 +234,11 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 					const isStreamingPromptUnderConstruction =
 						isPromptConstructionRow && message.partial === true && index === data.items.length - 1
 					const shouldShowStats = !isStreamingPromptUnderConstruction
-					const statsText = `${formatCount(entry.toolCalls)} tools called · ${formatCount(entry.contextTokens)} tokens · ${formatCost(entry.totalCost)}`
+					const stats = [`${formatCount(entry.toolCalls)} tools called`, `${formatCount(entry.contextTokens)} tokens`]
+					if (shouldShowCostMetadata) {
+						stats.push(formatCost(entry.totalCost))
+					}
+					const statsText = stats.join(" · ")
 					const latestToolCallText = entry.latestToolCall?.trim() || ""
 					return (
 						<div

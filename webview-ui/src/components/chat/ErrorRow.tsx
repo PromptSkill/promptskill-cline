@@ -1,12 +1,11 @@
 import { ClineMessage } from "@shared/ExtensionMessage"
-import { memo } from "react"
-import CreditLimitError from "@/components/chat/CreditLimitError"
-import SpendLimitError from "@/components/chat/SpendLimitError"
-import { Button } from "@/components/ui/button"
-import { useClineAuth, useClineSignIn } from "@/context/ClineAuthContext"
+import { lazy, memo, Suspense } from "react"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { isPromptSkillWorkspaceFlag } from "@/integrations/promptskill/policy"
 import { ClineError, ClineErrorType } from "../../../../src/services/error/ClineError"
 
 const _errorColor = "var(--vscode-errorForeground)"
+const ClineAccountErrorContent = lazy(() => import("./ClineAccountErrorContent"))
 
 interface ErrorRowProps {
 	message: ClineMessage
@@ -16,10 +15,8 @@ interface ErrorRowProps {
 }
 
 const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStreamingFailedMessage }: ErrorRowProps) => {
-	const { clineUser } = useClineAuth()
+	const { isPromptSkillWorkspace } = useExtensionState()
 	const rawApiError = apiRequestFailedMessage || apiReqStreamingFailedMessage
-
-	const { isLoginLoading, handleSignIn } = useClineSignIn()
 
 	const renderErrorContent = () => {
 		switch (errorType) {
@@ -34,32 +31,11 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 					const providerId = clineError?.providerId || clineError?._error?.providerId
 					const isClineProvider = providerId === "cline"
 					const errorCode = clineError?._error?.code
-
-					if (clineError?.isErrorType(ClineErrorType.Balance)) {
-						const errorDetails = clineError._error?.details
-						return (
-							<CreditLimitError
-								buyCreditsUrl={errorDetails?.buy_credits_url}
-								currentBalance={errorDetails?.current_balance}
-								message={errorDetails?.message}
-								totalPromotions={errorDetails?.total_promotions}
-								totalSpent={errorDetails?.total_spent}
-							/>
-						)
-					}
-
-					if (clineError?.isErrorType(ClineErrorType.SpendLimit)) {
-						const d = clineError._error?.details
-						return (
-							<SpendLimitError
-								budgetPeriod={d?.budget_period}
-								limitUsd={d?.limit_usd}
-								message={d?.message || errorMessage}
-								resetsAt={d?.resets_at}
-								spentUsd={d?.spent_usd}
-							/>
-						)
-					}
+					const canLoadClineAccountError =
+						!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace) &&
+						(clineError?.isErrorType(ClineErrorType.Balance) ||
+							clineError?.isErrorType(ClineErrorType.SpendLimit) ||
+							(clineError?.isErrorType(ClineErrorType.Auth) && isClineProvider))
 
 					if (clineError?.isErrorType(ClineErrorType.RateLimit)) {
 						return (
@@ -70,27 +46,11 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 						)
 					}
 
-					if (clineError?.isErrorType(ClineErrorType.Auth) && isClineProvider) {
-						return !clineUser ? (
-							// User is using Cline provider and is not logged in
-							<div className="flex flex-col gap-3">
-								<div className="flex items-center justify-center rounded border border-neutral-500/30 bg-vscode-editor-background p-6 text-center text-vscode-foreground">
-									Whoops looks like you're logged out – click below to sign in
-								</div>
-								<Button className="w-full" disabled={isLoginLoading} onClick={handleSignIn}>
-									Sign in to Cline
-									{isLoginLoading && (
-										<span className="ml-1 animate-spin">
-											<span className="codicon codicon-refresh" />
-										</span>
-									)}
-								</Button>
-							</div>
-						) : (
-							// Don't show sign in button after the user has logged in, just ask them to retry
-							<div className="mt-4">
-								<span className="text-description">(Click "Retry" below)</span>
-							</div>
+					if (canLoadClineAccountError) {
+						return (
+							<Suspense fallback={null}>
+								<ClineAccountErrorContent rawApiError={rawApiError} />
+							</Suspense>
 						)
 					}
 

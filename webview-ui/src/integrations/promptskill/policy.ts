@@ -1,3 +1,5 @@
+import { PLATFORM_CONFIG } from "@/config/platform.config"
+
 type FeatureTip = {
 	text: string
 }
@@ -6,13 +8,26 @@ type NavigationTab = {
 	id: string
 }
 
+type HistoryFilterEntry = readonly [string, string]
+
 type ButtonConfig = {
 	primaryText?: string
 	secondaryText?: string
 }
 
-type FileEditTool = {
-	tool?: string
+type PromptSkillViewChangesMessage = {
+	type?: string
+	ask?: string
+}
+
+type PromptSkillViewChangesActionProps = {
+	trailingActionLabel: string
+	onTrailingAction: () => void
+}
+
+type PromptSkillChatCopyScopeProps = {
+	"data-chat-copy-scope"?: "true"
+	"data-chat-copy-text"?: string
 }
 
 /**
@@ -41,6 +56,10 @@ export function shouldShowClineModelFooter(isPromptSkillWorkspace: boolean | und
 	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
 }
 
+export function shouldShowClineRulesControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
 export function shouldShowClineMarketingBanners(isPromptSkillWorkspace: boolean | undefined): boolean {
 	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
 }
@@ -53,12 +72,126 @@ export function shouldShowClineAutoApproveControls(isPromptSkillWorkspace: boole
 	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
 }
 
+export function shouldLoadClineAccountAndTelemetryProviders(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldSubscribeToClineAccountControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldSubscribeToClineDynamicModelFeeds(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldSubscribeToClineSettingsControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldSubscribeToClineWorktreeControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldRefreshClineModelCatalogs(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldShowClineAccountControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldShowClineWelcomeSurfaces(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldShowClineWorktreeControls(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function shouldShowClineCostMetadata(isPromptSkillWorkspace: boolean | undefined): boolean {
+	return !isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)
+}
+
+export function promptSkillChatCopyScopeProps(
+	isPromptSkillWorkspace: boolean | undefined,
+	text?: string,
+): PromptSkillChatCopyScopeProps {
+	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)) {
+		return {}
+	}
+
+	return {
+		"data-chat-copy-scope": "true",
+		...(text !== undefined ? { "data-chat-copy-text": text } : {}),
+	}
+}
+
+export function filterPromptSkillHistoryFilterEntries<T extends HistoryFilterEntry>(
+	entries: T[],
+	isPromptSkillWorkspace: boolean | undefined,
+): T[] {
+	if (shouldShowClineCostMetadata(isPromptSkillWorkspace)) {
+		return entries
+	}
+
+	return entries.filter(([key]) => key !== "mostExpensive")
+}
+
+export function normalizePromptSkillHistorySortOption<T extends string>(
+	sortOption: T,
+	isPromptSkillWorkspace: boolean | undefined,
+): T | "newest" {
+	if (shouldShowClineCostMetadata(isPromptSkillWorkspace) || sortOption !== "mostExpensive") {
+		return sortOption
+	}
+
+	return "newest"
+}
+
 export function promptSkillFileActionHelperText(isPromptSkillWorkspace: boolean | undefined): string | undefined {
 	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)) {
 		return undefined
 	}
 
-	return "Review changes, then accept or reject them. Use View Changes if you closed the diff."
+	return "Review changes, then accept or reject them. Changes may take a moment to load."
+}
+
+export function promptSkillScrollToFileActionHelperText(
+	buttonConfig: ButtonConfig,
+	isPromptSkillWorkspace: boolean | undefined,
+): string | undefined {
+	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace)) {
+		return undefined
+	}
+
+	if (buttonConfig.primaryText !== "Accept Changes" || buttonConfig.secondaryText !== "Reject Changes") {
+		return undefined
+	}
+
+	return "Scroll down to accept or reject changes"
+}
+
+export function promptSkillViewChangesActionProps({
+	isLast,
+	isPromptSkillWorkspace,
+	message,
+}: {
+	isLast: boolean
+	isPromptSkillWorkspace: boolean | undefined
+	message: PromptSkillViewChangesMessage
+}): PromptSkillViewChangesActionProps | undefined {
+	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace) || !isLast || message.type !== "ask" || message.ask !== "tool") {
+		return undefined
+	}
+
+	return {
+		trailingActionLabel: "View Changes",
+		onTrailingAction: () => PLATFORM_CONFIG.postMessage({ type: "promptskill_reopen_current_diff" }),
+	}
 }
 
 export function promptSkillButtonConfig<T extends ButtonConfig>(buttonConfig: T, isPromptSkillWorkspace: boolean | undefined): T {
@@ -74,22 +207,6 @@ export function promptSkillButtonConfig<T extends ButtonConfig>(buttonConfig: T,
 		...buttonConfig,
 		primaryText: "Accept Changes",
 		secondaryText: "Reject Changes",
-	}
-}
-
-export function shouldShowPromptSkillViewChangesButton(
-	message: { type?: string; ask?: string; text?: string } | undefined,
-	isPromptSkillWorkspace: boolean | undefined,
-): boolean {
-	if (!isPromptSkillWorkspaceFlag(isPromptSkillWorkspace) || message?.type !== "ask" || message.ask !== "tool") {
-		return false
-	}
-
-	try {
-		const tool = JSON.parse(message.text || "{}") as FileEditTool
-		return tool.tool === "editedExistingFile" || tool.tool === "newFileCreated"
-	} catch {
-		return false
 	}
 }
 
@@ -113,5 +230,5 @@ export function filterPromptSkillNavigationTabs<T extends NavigationTab>(
 		return tabs
 	}
 
-	return tabs.filter((tab) => tab.id !== "mcp" && tab.id !== "settings")
+	return tabs.filter((tab) => tab.id !== "mcp" && tab.id !== "settings" && tab.id !== "account")
 }

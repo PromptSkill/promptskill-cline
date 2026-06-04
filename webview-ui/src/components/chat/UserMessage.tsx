@@ -1,10 +1,9 @@
-import { CheckpointRestoreRequest } from "@shared/proto/cline/checkpoints"
-import { ClineCheckpointRestore } from "@shared/WebviewMessage"
+import type { ClineCheckpointRestore } from "@shared/WebviewMessage"
 import React, { forwardRef, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import Thumbnails from "@/components/common/Thumbnails"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { CheckpointsServiceClient } from "@/services/grpc-client"
+import { promptSkillChatCopyScopeProps } from "@/integrations/promptskill/policy"
 import { highlightText } from "./task-header/Highlights"
 
 interface UserMessageProps {
@@ -19,7 +18,9 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	const [isEditing, setIsEditing] = useState(false)
 	const [editedText, setEditedText] = useState(text || "")
 	const textAreaRef = useRef<HTMLTextAreaElement>(null)
-	const { checkpointManagerErrorMessage } = useExtensionState()
+	const { checkpointManagerErrorMessage, isPromptSkillWorkspace } = useExtensionState()
+	// PromptSkill: hosted assessment chat messages are scoped for the candidate copy menu.
+	const promptSkillCopyScopeProps = promptSkillChatCopyScopeProps(isPromptSkillWorkspace, text)
 
 	const highlightedText = useMemo(() => highlightText(editedText || text), [editedText, text])
 
@@ -49,6 +50,11 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 		}
 
 		try {
+			const [{ CheckpointRestoreRequest }, { CheckpointsServiceClient }] = await Promise.all([
+				import("@shared/proto/cline/checkpoints"),
+				import("@/services/grpc-client"),
+			])
+
 			await CheckpointsServiceClient.checkpointRestore(
 				CheckpointRestoreRequest.create({
 					number: messageTs,
@@ -90,6 +96,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	return (
 		<div
 			className="p-2.5 pr-1 my-1 text-badge-foreground rounded-xs"
+			{...promptSkillCopyScopeProps}
 			onClick={handleClick}
 			style={{
 				backgroundColor: isEditing ? "unset" : "var(--vscode-badge-background)",

@@ -3,33 +3,33 @@ import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
-import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
-import { useCallback, useEffect, useMemo } from "react"
+import { BooleanRequest } from "@shared/proto/cline/common"
+import { lazy, Suspense, useCallback, useEffect, useMemo } from "react"
 import { useMount } from "react-use"
-import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
-import { shouldShowClineAutoApproveControls } from "@/integrations/promptskill/policy"
+import { PromptSkillChatCopyMenu } from "@/integrations/promptskill/PromptSkillChatCopyMenu"
+import { PromptSkillHomeSection } from "@/integrations/promptskill/PromptSkillHomeSection"
+import { shouldShowClineAutoApproveControls, shouldShowClineWelcomeSurfaces } from "@/integrations/promptskill/policy"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
-import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
-// Import utilities and hooks from the new structure
-import {
-	ActionButtons,
-	CHAT_CONSTANTS,
-	ChatLayout,
-	convertHtmlToMarkdown,
-	filterVisibleMessages,
-	groupLowStakesTools,
-	groupMessages,
-	InputSection,
-	MessagesArea,
-	TaskSection,
-	useChatState,
-	useMessageHandlers,
-	useScrollBehavior,
-	WelcomeSection,
-} from "./chat-view"
+import { ActionButtons } from "./chat-view/components/layout/ActionButtons"
+import { ChatLayout } from "./chat-view/components/layout/ChatLayout"
+import { InputSection } from "./chat-view/components/layout/InputSection"
+import { MessagesArea } from "./chat-view/components/layout/MessagesArea"
+import { TaskSection } from "./chat-view/components/layout/TaskSection"
+import { CHAT_CONSTANTS } from "./chat-view/constants"
+import { useChatState } from "./chat-view/hooks/useChatState"
+import { useMessageHandlers } from "./chat-view/hooks/useMessageHandlers"
+import { useScrollBehavior } from "./chat-view/hooks/useScrollBehavior"
+import { copyTextToClipboard, getCopyTextFromSelection, isEditableCopyTarget } from "./chat-view/utils/copyUtils"
+import { filterVisibleMessages, groupLowStakesTools, groupMessages } from "./chat-view/utils/messageUtils"
+import { useChatModelSelection } from "./chatModelSelection"
+
+const AutoApproveBar = lazy(() => import("./auto-approve-menu/AutoApproveBar"))
+const WelcomeSection = lazy(() =>
+	import("./chat-view/components/layout/WelcomeSection").then((module) => ({ default: module.WelcomeSection })),
+)
 
 interface ChatViewProps {
 	isHidden: boolean
@@ -93,73 +93,18 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 			const targetElement = e.target as HTMLElement | null
 			// If the copy event originated from an input or textarea,
 			// let the default browser behavior handle it.
-			if (
-				targetElement &&
-				(targetElement.tagName === "INPUT" || targetElement.tagName === "TEXTAREA" || targetElement.isContentEditable)
-			) {
+			if (isEditableCopyTarget(targetElement)) {
 				return
 			}
 
 			if (window.getSelection) {
 				const selection = window.getSelection()
 				if (selection && selection.rangeCount > 0) {
-					const range = selection.getRangeAt(0)
-					const commonAncestor = range.commonAncestorContainer
-					let textToCopy: string | null = null
-
-					// Check if the selection is inside an element where plain text copy is preferred
-					let currentElement =
-						commonAncestor.nodeType === Node.ELEMENT_NODE
-							? (commonAncestor as HTMLElement)
-							: commonAncestor.parentElement
-					let preferPlainTextCopy = false
-					while (currentElement) {
-						if (currentElement.tagName === "PRE" && currentElement.querySelector("code")) {
-							preferPlainTextCopy = true
-							break
-						}
-						// Check computed white-space style
-						const computedStyle = window.getComputedStyle(currentElement)
-						if (
-							computedStyle.whiteSpace === "pre" ||
-							computedStyle.whiteSpace === "pre-wrap" ||
-							computedStyle.whiteSpace === "pre-line"
-						) {
-							// If the element itself or an ancestor has pre-like white-space,
-							// and the selection is likely contained within it, prefer plain text.
-							// This helps with elements like the TaskHeader's text display.
-							preferPlainTextCopy = true
-							break
-						}
-
-						// Stop searching if we reach a known chat message boundary or body
-						if (
-							currentElement.classList.contains("chat-row-assistant-message-container") ||
-							currentElement.classList.contains("chat-row-user-message-container") ||
-							currentElement.tagName === "BODY"
-						) {
-							break
-						}
-						currentElement = currentElement.parentElement
-					}
-
-					if (preferPlainTextCopy) {
-						// For code blocks or elements with pre-formatted white-space, get plain text.
-						textToCopy = selection.toString()
-					} else {
-						// For other content, use the existing HTML-to-Markdown conversion
-						const clonedSelection = range.cloneContents()
-						const div = document.createElement("div")
-						div.appendChild(clonedSelection)
-						const selectedHtml = div.innerHTML
-						textToCopy = await convertHtmlToMarkdown(selectedHtml)
-					}
+					const textToCopy = await getCopyTextFromSelection(selection)
 
 					if (textToCopy !== null) {
 						try {
-							FileServiceClient.copyToClipboard(StringRequest.create({ value: textToCopy })).catch((err) => {
-								console.error("Error copying to clipboard:", err)
-							})
+							copyTextToClipboard(textToCopy)
 							e.preventDefault()
 						} catch (error) {
 							console.error("Error copying to clipboard:", error)
@@ -174,6 +119,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 			document.removeEventListener("copy", handleCopy)
 		}
 	}, [])
+
 	// Button state is now managed by useButtonState hook
 
 	// handleFocusChange is already provided by chatState
@@ -181,9 +127,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	// Use message handlers hook
 	const messageHandlers = useMessageHandlers(messages, chatState)
 
-	const { selectedModelInfo } = useMemo(() => {
-		return normalizeApiConfiguration(apiConfiguration, mode)
-	}, [apiConfiguration, mode])
+	const { selectedModelInfo } = useChatModelSelection(apiConfiguration, mode, isPromptSkillWorkspace)
 
 	const selectFilesAndImages = useCallback(async () => {
 		try {
@@ -326,10 +270,12 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	// Use scroll behavior hook
 	const scrollBehavior = useScrollBehavior(messages, visibleMessages, groupedMessages, expandedRows, setExpandedRows)
 
+	const shouldRenderWelcomeSection = shouldShowClineWelcomeSurfaces(isPromptSkillWorkspace)
+
 	const placeholderText = useMemo(() => {
-		const text = task ? "Type a message..." : "Type your task here..."
+		const text = task || !shouldRenderWelcomeSection ? "Type a message..." : "Type your task here..."
 		return text
-	}, [task])
+	}, [shouldRenderWelcomeSection, task])
 
 	return (
 		<ChatLayout isHidden={isHidden}>
@@ -348,17 +294,22 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						showFocusChainPlaceholder={showFocusChainPlaceholder}
 						task={task}
 					/>
-				) : (
-					<WelcomeSection
-						hideAnnouncement={hideAnnouncement}
-						shouldShowQuickWins={shouldShowQuickWins}
-						showAnnouncement={showAnnouncement}
-						showHistoryView={showHistoryView}
-						taskHistory={taskHistory}
-						telemetrySetting={telemetrySetting}
-						version={version}
-					/>
-				)}
+				) : shouldRenderWelcomeSection ? (
+					<Suspense fallback={null}>
+						<WelcomeSection
+							hideAnnouncement={hideAnnouncement}
+							shouldShowQuickWins={shouldShowQuickWins}
+							showAnnouncement={showAnnouncement}
+							showHistoryView={showHistoryView}
+							taskHistory={taskHistory}
+							telemetrySetting={telemetrySetting}
+							version={version}
+						/>
+					</Suspense>
+				) : isPromptSkillWorkspace ? (
+					// PromptSkill: restore the useful home/history screen without loading upstream marketing/setup surfaces.
+					<PromptSkillHomeSection showHistoryView={showHistoryView} />
+				) : null}
 				{task && (
 					<MessagesArea
 						chatState={chatState}
@@ -370,8 +321,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					/>
 				)}
 			</div>
+			{/* PromptSkill: candidate chat needs a scoped copy menu when Theia suppresses the native context menu. */}
+			<PromptSkillChatCopyMenu enabled={isPromptSkillWorkspace} />
 			<footer className="bg-(--vscode-sidebar-background)" style={{ gridRow: "2" }}>
-				{shouldShowClineAutoApproveControls(isPromptSkillWorkspace) && <AutoApproveBar />}
+				{shouldShowClineAutoApproveControls(isPromptSkillWorkspace) && (
+					<Suspense fallback={null}>
+						<AutoApproveBar />
+					</Suspense>
+				)}
 				<ActionButtons
 					chatState={chatState}
 					messageHandlers={messageHandlers}

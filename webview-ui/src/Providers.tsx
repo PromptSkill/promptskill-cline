@@ -1,19 +1,38 @@
 import { HeroUIProvider } from "@heroui/react"
-import { type ReactNode } from "react"
-import { CustomPostHogProvider } from "./CustomPostHogProvider"
-import { ClineAuthProvider } from "./context/ClineAuthContext"
-import { ExtensionStateContextProvider } from "./context/ExtensionStateContext"
+import { lazy, type ReactNode, Suspense } from "react"
+import { ExtensionStateContextProvider, useExtensionState } from "./context/ExtensionStateContext"
 import { PlatformProvider } from "./context/PlatformContext"
+import { shouldLoadClineAccountAndTelemetryProviders } from "./integrations/promptskill/policy"
+
+const CustomPostHogProvider = lazy(() =>
+	import("./CustomPostHogProvider").then((module) => ({ default: module.CustomPostHogProvider })),
+)
+const ClineAuthProvider = lazy(() =>
+	import("./context/ClineAuthContext").then((module) => ({ default: module.ClineAuthProvider })),
+)
+
+function OptionalClineProviders({ children }: { children: ReactNode }) {
+	const { didHydrateState, isPromptSkillWorkspace } = useExtensionState()
+	const content = <HeroUIProvider>{children}</HeroUIProvider>
+
+	if (!didHydrateState || !shouldLoadClineAccountAndTelemetryProviders(isPromptSkillWorkspace)) {
+		return content
+	}
+
+	return (
+		<Suspense fallback={null}>
+			<CustomPostHogProvider>
+				<ClineAuthProvider>{content}</ClineAuthProvider>
+			</CustomPostHogProvider>
+		</Suspense>
+	)
+}
 
 export function Providers({ children }: { children: ReactNode }) {
 	return (
 		<PlatformProvider>
 			<ExtensionStateContextProvider>
-				<CustomPostHogProvider>
-					<ClineAuthProvider>
-						<HeroUIProvider>{children}</HeroUIProvider>
-					</ClineAuthProvider>
-				</CustomPostHogProvider>
+				<OptionalClineProviders>{children}</OptionalClineProviders>
 			</ExtensionStateContextProvider>
 		</PlatformProvider>
 	)

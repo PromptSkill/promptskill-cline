@@ -34,37 +34,49 @@ interface DiffEditRowProps {
 	path: string
 	isLoading?: boolean
 	startLineNumbers?: number[]
+	trailingActionLabel?: string
+	onTrailingAction?: () => void
 }
 
-export const DiffEditRow = memo<DiffEditRowProps>(({ patch, path, isLoading, startLineNumbers }) => {
-	const { parsedFiles, isStreaming } = useMemo(() => {
-		const parsed = parsePatch(patch, path)
-		return {
-			parsedFiles: parsed.parsedFiles,
-			isStreaming: isLoading || parsed.isStreaming,
+export const DiffEditRow = memo<DiffEditRowProps>(
+	({ patch, path, isLoading, startLineNumbers, trailingActionLabel, onTrailingAction }) => {
+		const { parsedFiles, isStreaming } = useMemo(() => {
+			const parsed = parsePatch(patch, path)
+			return {
+				parsedFiles: parsed.parsedFiles,
+				isStreaming: isLoading || parsed.isStreaming,
+			}
+		}, [patch, path, isLoading])
+
+		if (!path) {
+			return null
 		}
-	}, [patch, path, isLoading])
 
-	if (!path) {
-		return null
-	}
+		return (
+			<div className="space-y-4 rounded-xs">
+				{parsedFiles.map((file, index) => (
+					<FileBlock
+						file={file}
+						isStreaming={isStreaming}
+						key={`${file.path}-${index}`}
+						onTrailingAction={onTrailingAction}
+						startLineNumber={startLineNumbers?.[index]}
+						trailingActionLabel={trailingActionLabel}
+					/>
+				))}
+			</div>
+		)
+	},
+)
 
-	return (
-		<div className="space-y-4 rounded-xs">
-			{parsedFiles.map((file, index) => (
-				<FileBlock
-					file={file}
-					isStreaming={isStreaming}
-					key={`${file.path}-${index}`}
-					startLineNumber={startLineNumbers?.[index]}
-				/>
-			))}
-		</div>
-	)
-})
-
-const FileBlock = memo<{ file: Patch; isStreaming: boolean; startLineNumber?: number }>(
-	({ file, isStreaming, startLineNumber }) => {
+const FileBlock = memo<{
+	file: Patch
+	isStreaming: boolean
+	startLineNumber?: number
+	trailingActionLabel?: string
+	onTrailingAction?: () => void
+}>(
+	({ file, isStreaming, startLineNumber, trailingActionLabel, onTrailingAction }) => {
 		const [isExpanded, setIsExpanded] = useState(true)
 		const scrollContainerRef = useRef<HTMLDivElement>(null)
 		const shouldFollowRef = useRef(true)
@@ -104,9 +116,15 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; startLineNumber?: nu
 				)
 			}
 		}
+		const handleTrailingAction = (event: React.MouseEvent) => {
+			event.stopPropagation()
+			onTrailingAction?.()
+		}
+		const toggleExpanded = () => setIsExpanded((prev) => !prev)
 
 		const actionStyle = ACTION_STYLES[file.action as keyof typeof ACTION_STYLES] ?? ACTION_STYLES.default
 		const ActionIcon = actionStyle.icon
+		const hasTrailingAction = Boolean(trailingActionLabel && onTrailingAction)
 
 		// Only calculate line numbers if we have actual positions from the backend
 		// When startLineNumber is undefined (e.g., V2 diff or no match indices), we skip line numbers entirely
@@ -138,11 +156,11 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; startLineNumber?: nu
 
 		return (
 			<div className="bg-code rounded-xs border border-editor-group-border overflow-hidden">
-				<button
-					className="w-full flex items-center gap-2 p-2 bg-code transition-colors justify-between cursor-pointer"
-					onClick={() => setIsExpanded((prev) => !prev)}
-					type="button">
-					<div className="flex items-center gap-3 flex-1 w-full overflow-hidden">
+				<div className="flex flex-wrap items-stretch bg-code">
+					<button
+						className="flex min-w-32 flex-1 basis-40 cursor-pointer items-center gap-2 p-2 text-left transition-colors"
+						onClick={toggleExpanded}
+						type="button">
 						<div className={cn("flex items-center gap-2 w-full", actionStyle.borderClass)}>
 							<ActionIcon className={cn("w-5 h-5", actionStyle.iconClass)} />
 							<span
@@ -152,17 +170,28 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; startLineNumber?: nu
 								{file.path}
 							</span>
 						</div>
-					</div>
-					<div className="flex items-center gap-2">
+					</button>
+					<div className="ml-auto flex min-w-0 max-w-full shrink-0 flex-wrap items-center justify-end gap-2 p-2">
 						<DiffStats additions={file.additions} deletions={file.deletions} />
-						<span
+						{hasTrailingAction && (
+							<button
+								className="inline-flex max-w-full cursor-pointer items-center gap-1 rounded-xs border border-editor-group-border bg-toolbar-hover/50 px-2 py-1 text-xs text-description hover:bg-toolbar-hover hover:text-foreground"
+								onClick={handleTrailingAction}
+								title={trailingActionLabel}
+								type="button">
+								<span className="truncate">{trailingActionLabel}</span>
+								<span className="codicon codicon-chevron-right text-xs" />
+							</button>
+						)}
+						<button
 							className="p-1 hover:bg-description/20 rounded-xs transition-colors"
 							onClick={handleOpenFile}
-							title="Open file in editor">
+							title="Open file in editor"
+							type="button">
 							<SquareArrowOutUpRightIcon className="size-2 text-description hover:text-foreground" />
-						</span>
+						</button>
 					</div>
-				</button>
+				</div>
 
 				{isExpanded && (
 					<div
@@ -186,7 +215,9 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; startLineNumber?: nu
 		prev.file.action === next.file.action &&
 		prev.file.additions === next.file.additions &&
 		prev.file.deletions === next.file.deletions &&
-		prev.file.lines === next.file.lines,
+		prev.file.lines === next.file.lines &&
+		prev.trailingActionLabel === next.trailingActionLabel &&
+		prev.onTrailingAction === next.onTrailingAction,
 )
 
 const DiffStats = memo<{ additions: number; deletions: number }>(({ additions, deletions }) => (

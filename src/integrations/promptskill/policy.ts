@@ -112,3 +112,7 @@ export function promptSkillAttemptCompletionCommand(defaultCommand: string | und
 
 	return undefined
 }
+
+export function shouldRunClineWebviewStartupRefreshes(): boolean {
+	return !isPromptSkillWorkspace()
+}

@@ -4,6 +4,7 @@ import { DecorationController } from "@/hosts/vscode/DecorationController"
 import { NotebookDiffView } from "@/hosts/vscode/NotebookDiffView"
 import {
 	openPromptSkillDiffEditorWithTheiaFallback,
+	revealPromptSkillDiffEditor,
 	showPromptSkillEditableDiffDocument,
 } from "@/integrations/promptskill/diffEditor"
 import {
@@ -20,6 +21,8 @@ import { Logger } from "@/shared/services/Logger"
 import { arePathsEqual } from "@/utils/path"
 
 export const DIFF_VIEW_URI_SCHEME = "cline-diff"
+const PROMPTSKILL_DIFF_BOTTOM_RESUME_LINE_TOLERANCE = 3
+const PROMPTSKILL_PROGRAMMATIC_REVEAL_SUPPRESSION_MS = 150
 
 export class VscodeDiffViewProvider extends DiffViewProvider {
 	private activeDiffEditor?: vscode.TextEditor
@@ -28,7 +31,14 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 	private activeLineController?: DecorationController
 	private notebookDiffView?: NotebookDiffView
 	private activeDiffDocumentChangeDisposable?: vscode.Disposable
+	private activeDiffVisibleRangesDisposable?: vscode.Disposable
 	private isApplyingPromptSkillLiveEdit = false
+	private isRevealingPromptSkillStreamedEdit = false
+	private shouldAutoRevealPromptSkillStreamedEdit = true
+	private pendingPromptSkillProgrammaticRevealLine?: number
+	private suppressPromptSkillProgrammaticRevealEventsUntil = 0
+	private suppressPromptSkillVisibleRangeEventsUntil = 0
+	private lastPromptSkillVisibleRangeStartLine?: number
 
 	override async openDiffEditor(): Promise<void> {
 		if (!this.absolutePath) {
@@ -79,11 +89,21 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		this.fadedOverlayController = new DecorationController("fadedOverlay", this.activeDiffEditor)
 		this.activeLineController = new DecorationController("activeLine", this.activeDiffEditor)
+		this.resetPromptSkillStreamRevealTracking()
 		// PromptSkill: candidate tweaks inside the visible diff must survive even if
 		// the diff editor is later closed before chat approval.
 		this.watchActiveDiffDocumentChanges()
+		this.watchActiveDiffVisibleRangeChanges()
 		// Apply faded overlay to all lines initially
 		this.fadedOverlayController.addLines(0, this.activeDiffEditor.document.lineCount)
+	}
+
+	private resetPromptSkillStreamRevealTracking(): void {
+		this.shouldAutoRevealPromptSkillStreamedEdit = true
+		this.pendingPromptSkillProgrammaticRevealLine = undefined
+		this.suppressPromptSkillProgrammaticRevealEventsUntil = 0
+		this.suppressPromptSkillVisibleRangeEventsUntil = 0
+		this.lastPromptSkillVisibleRangeStartLine = this.activeDiffEditor?.visibleRanges[0]?.start.line
 	}
 
 	private watchActiveDiffDocumentChanges(): void {
@@ -106,6 +126,90 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 				})
 			}
 		})
+	}
+
+	private watchActiveDiffVisibleRangeChanges(): void {
+		this.activeDiffVisibleRangesDisposable?.dispose()
+
+		const activeDiffDocument = this.activeDiffEditor?.document
+		if (!activeDiffDocument || !isPromptSkillWorkspace()) {
+			return
+		}
+
+		this.activeDiffVisibleRangesDisposable = vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
+			if (
+				!this.isEditing ||
+				event.textEditor !== this.activeDiffEditor ||
+				!arePathsEqual(event.textEditor.document.uri.fsPath, activeDiffDocument.uri.fsPath)
+			) {
+				return
+			}
+
+			const visibleRange = event.visibleRanges[0]
+			const visibleRangeStartLine = visibleRange?.start.line
+			const visibleRangeMovedUp =
+				visibleRangeStartLine !== undefined &&
+				this.lastPromptSkillVisibleRangeStartLine !== undefined &&
+				visibleRangeStartLine < this.lastPromptSkillVisibleRangeStartLine
+			const visibleRangeIsNearDocumentBottom =
+				visibleRange?.end.line !== undefined &&
+				visibleRange.end.line >= event.textEditor.document.lineCount - 1 - PROMPTSKILL_DIFF_BOTTOM_RESUME_LINE_TOLERANCE
+			this.lastPromptSkillVisibleRangeStartLine = visibleRangeStartLine
+
+			const visibleRangeEventIsFromLiveProjection =
+				this.isApplyingPromptSkillLiveEdit ||
+				this.isRevealingPromptSkillStreamedEdit ||
+				Date.now() < this.suppressPromptSkillVisibleRangeEventsUntil
+			const visibleRangeEventIsFromExpectedProgrammaticReveal =
+				this.visibleRangeContainsPendingPromptSkillProgrammaticReveal(visibleRange, event.textEditor.document.lineCount)
+			if (visibleRangeEventIsFromLiveProjection) {
+				return
+			}
+			if (visibleRangeEventIsFromExpectedProgrammaticReveal) {
+				return
+			}
+			if (visibleRangeIsNearDocumentBottom) {
+				// PromptSkill: candidates can resume streamed auto-follow by
+				// explicitly returning the diff editor viewport near the bottom.
+				this.shouldAutoRevealPromptSkillStreamedEdit = true
+				return
+			}
+			if (!visibleRangeMovedUp) {
+				return
+			}
+
+			// PromptSkill: once candidates take over the diff editor viewport, the
+			// streaming writer should stop recentering the editor on every chunk.
+			// Upward movement is the manual-takeover signal because layout/focus
+			// churn and normal streamed reveals can also change visible ranges.
+			this.shouldAutoRevealPromptSkillStreamedEdit = false
+		})
+	}
+
+	override async reopenDiffView(): Promise<boolean> {
+		if (!this.isEditing || !this.absolutePath) {
+			return false
+		}
+
+		if (!isPromptSkillWorkspace()) {
+			return super.reopenDiffView()
+		}
+
+		// PromptSkill: the chat "View Changes" action should focus the editable
+		// diff tab, not open the modified file as a plain App.tsx editor.
+		this.activeDiffEditor = await revealPromptSkillDiffEditor({
+			uri: vscode.Uri.file(this.absolutePath),
+			originalContent: this.originalContent,
+			diffViewUriScheme: DIFF_VIEW_URI_SCHEME,
+			editType: this.editType,
+		})
+		this.fadedOverlayController = new DecorationController("fadedOverlay", this.activeDiffEditor)
+		this.activeLineController = new DecorationController("activeLine", this.activeDiffEditor)
+		this.watchActiveDiffDocumentChanges()
+		this.watchActiveDiffVisibleRangeChanges()
+		this.resetPromptSkillStreamRevealTracking()
+		await this.scrollToFirstDiff()
+		return true
 	}
 
 	override async replaceText(
@@ -146,6 +250,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 		})
 
 		this.isApplyingPromptSkillLiveEdit = true
+		this.suppressPromptSkillLiveProjectionVisibleRangeEvents()
 		try {
 			logPromptSkillEditProbe("edit_call_start", editMetadata)
 			await this.activeDiffEditor.edit((editBuilder) => {
@@ -182,6 +287,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 				// workspace.applyEdit can delay candidate feedback here.
 				const fixStartedAt = Date.now()
 				this.isApplyingPromptSkillLiveEdit = true
+				this.suppressPromptSkillLiveProjectionVisibleRangeEvents()
 				try {
 					await this.activeDiffEditor.edit((editBuilder) => {
 						editBuilder.insert(document.lineAt(document.lineCount - 1).range.end, "\n".repeat(newlineDelta))
@@ -196,6 +302,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 				const startLine = Math.max(0, document.lineCount + newlineDelta)
 				const fixStartedAt = Date.now()
 				this.isApplyingPromptSkillLiveEdit = true
+				this.suppressPromptSkillLiveProjectionVisibleRangeEvents()
 				try {
 					await this.activeDiffEditor.edit((editBuilder) => {
 						editBuilder.delete(new vscode.Range(startLine, 0, document.lineCount, 0))
@@ -241,6 +348,8 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 		this.activeLineController = undefined
 		this.activeDiffDocumentChangeDisposable?.dispose()
 		this.activeDiffDocumentChangeDisposable = undefined
+		this.activeDiffVisibleRangesDisposable?.dispose()
+		this.activeDiffVisibleRangesDisposable = undefined
 
 		return true
 	}
@@ -250,7 +359,12 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 			return
 		}
 		const scrollLine = line + 4
-		this.activeDiffEditor.revealRange(new vscode.Range(scrollLine, 0, scrollLine, 0), vscode.TextEditorRevealType.InCenter)
+		await this.runPromptSkillProgrammaticReveal(scrollLine, () => {
+			this.activeDiffEditor?.revealRange(
+				new vscode.Range(scrollLine, 0, scrollLine, 0),
+				vscode.TextEditorRevealType.InCenter,
+			)
+		})
 	}
 
 	override async scrollAnimation(startLine: number, endLine: number): Promise<void> {
@@ -263,9 +377,73 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		// Create and await the smooth scrolling animation
 		for (let line = startLine; line <= endLine; line += stepSize) {
-			this.activeDiffEditor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.InCenter)
+			await this.runPromptSkillProgrammaticReveal(line, () => {
+				this.activeDiffEditor?.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.InCenter)
+			})
 			await new Promise((resolve) => setTimeout(resolve, 16)) // ~60fps
 		}
+	}
+
+	private async runPromptSkillProgrammaticReveal(targetLine: number, reveal: () => void): Promise<void> {
+		if (!isPromptSkillWorkspace()) {
+			reveal()
+			return
+		}
+
+		this.isRevealingPromptSkillStreamedEdit = true
+		this.pendingPromptSkillProgrammaticRevealLine = targetLine
+		this.suppressPromptSkillProgrammaticRevealEventsUntil = Date.now() + PROMPTSKILL_PROGRAMMATIC_REVEAL_SUPPRESSION_MS
+		try {
+			reveal()
+		} finally {
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			this.isRevealingPromptSkillStreamedEdit = false
+		}
+	}
+
+	protected override shouldAutoRevealStreamedUpdate(): boolean {
+		if (!isPromptSkillWorkspace()) {
+			return super.shouldAutoRevealStreamedUpdate()
+		}
+
+		return this.shouldAutoRevealPromptSkillStreamedEdit
+	}
+
+	private visibleRangeContainsPendingPromptSkillProgrammaticReveal(
+		visibleRange: vscode.Range | undefined,
+		documentLineCount: number,
+	): boolean {
+		if (
+			!visibleRange ||
+			this.pendingPromptSkillProgrammaticRevealLine === undefined ||
+			Date.now() >= this.suppressPromptSkillProgrammaticRevealEventsUntil
+		) {
+			this.pendingPromptSkillProgrammaticRevealLine = undefined
+			this.suppressPromptSkillProgrammaticRevealEventsUntil = 0
+			return false
+		}
+
+		const pendingRevealLine = Math.min(this.pendingPromptSkillProgrammaticRevealLine, Math.max(0, documentLineCount - 1))
+		const visibleRangeContainsRevealLine =
+			visibleRange.start.line <= pendingRevealLine && visibleRange.end.line >= pendingRevealLine
+		if (!visibleRangeContainsRevealLine) {
+			return false
+		}
+
+		// PromptSkill: delayed revealRange viewport events can arrive after the
+		// direct reveal call returns; suppress only the event that still contains
+		// the line Cline just revealed so immediate user scroll-away still wins.
+		this.pendingPromptSkillProgrammaticRevealLine = undefined
+		this.suppressPromptSkillProgrammaticRevealEventsUntil = 0
+		return true
+	}
+
+	private suppressPromptSkillLiveProjectionVisibleRangeEvents(): void {
+		if (!isPromptSkillWorkspace()) {
+			return
+		}
+
+		this.suppressPromptSkillVisibleRangeEventsUntil = Date.now() + 50
 	}
 
 	override async truncateDocument(lineNumber: number): Promise<void> {
@@ -367,9 +545,12 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 
 		this.activeDiffDocumentChangeDisposable?.dispose()
 		this.activeDiffDocumentChangeDisposable = undefined
+		this.activeDiffVisibleRangesDisposable?.dispose()
+		this.activeDiffVisibleRangesDisposable = undefined
 		this.activeDiffEditor = undefined
 		this.fadedOverlayController = undefined
 		this.activeLineController = undefined
+		this.resetPromptSkillStreamRevealTracking()
 	}
 
 	protected override async switchToSpecializedEditor(): Promise<void> {

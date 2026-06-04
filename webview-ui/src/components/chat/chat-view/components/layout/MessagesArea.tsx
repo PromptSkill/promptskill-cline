@@ -205,7 +205,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			{/* Sticky User Message - positioned absolutely to avoid layout shifts */}
 			<div
 				className={cn(
-					"absolute top-0 left-0 right-0 z-10 pl-[15px] pr-[14px] bg-background",
+					// PromptSkill: right spacing mostly comes from the stable message scrollbar gutter.
+					"absolute top-0 left-0 right-0 z-10 pl-[15px] pr-0.5 bg-background",
 					scrolledPastUserMessage && "pb-2",
 				)}>
 				<StickyUserMessage
@@ -239,8 +240,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 					rangeChanged={handleRangeChanged}
 					ref={virtuosoRef} // anything lower causes issues with followOutput
 					style={{
-						scrollbarWidth: "none", // Firefox
-						msOverflowStyle: "none", // IE/Edge
+						// PromptSkill: reserve native scrollbar space instead of duplicating full right padding in each row.
+						scrollbarGutter: "stable",
 						overflowAnchor: "none", // prevent scroll jump when content expands
 					}}
 				/>

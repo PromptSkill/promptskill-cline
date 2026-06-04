@@ -8,6 +8,7 @@ import { GroupedVirtuoso } from "react-virtuoso"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { filterPromptSkillHistoryFilterEntries, normalizePromptSkillHistorySortOption } from "@/integrations/promptskill/policy"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { formatSize } from "@/utils/format"
 import ViewHeader from "../common/ViewHeader"
@@ -18,6 +19,7 @@ type HistoryViewProps = {
 }
 
 type SortOption = "newest" | "oldest" | "mostExpensive" | "mostTokens" | "mostRelevant"
+const HISTORY_SORT_OPTIONS = ["newest", "oldest", "mostExpensive", "mostTokens", "mostRelevant"]
 
 const isToday = (timestamp: number): boolean => {
 	const date = new Date(timestamp)
@@ -37,7 +39,7 @@ const HISTORY_FILTERS = {
 
 const HistoryView = ({ onDone }: HistoryViewProps) => {
 	const extensionStateContext = useExtensionState()
-	const { taskHistory, onRelinquishControl, environment } = extensionStateContext
+	const { taskHistory, onRelinquishControl, environment, isPromptSkillWorkspace } = extensionStateContext
 	const [searchQuery, setSearchQuery] = useState("")
 	const [sortOption, setSortOption] = useState<SortOption>("newest")
 	const [lastNonRelevantSort, setLastNonRelevantSort] = useState<SortOption | null>("newest")
@@ -52,6 +54,15 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	// Load filtered task history with gRPC
 	const [tasks, setTasks] = useState<any[]>([])
 
+	const effectiveSortOption = useMemo(
+		() => normalizePromptSkillHistorySortOption(sortOption, isPromptSkillWorkspace) as SortOption,
+		[isPromptSkillWorkspace, sortOption],
+	)
+	const historyFilterEntries = useMemo(
+		() => filterPromptSkillHistoryFilterEntries(Object.entries(HISTORY_FILTERS), isPromptSkillWorkspace),
+		[isPromptSkillWorkspace],
+	)
+
 	// Load and refresh task history
 	const loadTaskHistory = useCallback(async () => {
 		try {
@@ -59,7 +70,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 				GetTaskHistoryRequest.create({
 					favoritesOnly: showFavoritesOnly,
 					searchQuery: searchQuery || undefined,
-					sortBy: sortOption,
+					sortBy: effectiveSortOption,
 					currentWorkspaceOnly: showCurrentWorkspaceOnly,
 				}),
 			)
@@ -67,7 +78,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		} catch (error) {
 			console.error("Error loading task history:", error)
 		}
-	}, [showFavoritesOnly, showCurrentWorkspaceOnly, searchQuery, sortOption, taskHistory])
+	}, [showFavoritesOnly, showCurrentWorkspaceOnly, searchQuery, effectiveSortOption, taskHistory])
 
 	// Load when filters change
 	useEffect(() => {
@@ -144,22 +155,30 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	}, [fetchTotalTasksSize])
 
 	useEffect(() => {
+		// PromptSkill: stale UI state from a non-candidate view must not keep cost-based history sorting active.
+		if (effectiveSortOption !== sortOption) {
+			setSortOption(effectiveSortOption)
+			if (lastNonRelevantSort === sortOption) {
+				setLastNonRelevantSort(effectiveSortOption)
+			}
+			return
+		}
+
 		if (searchQuery && sortOption !== "mostRelevant" && !lastNonRelevantSort) {
 			setLastNonRelevantSort(sortOption)
 			setSortOption("mostRelevant")
 		} else if (!searchQuery && sortOption === "mostRelevant" && lastNonRelevantSort) {
-			setSortOption(lastNonRelevantSort)
+			setSortOption(normalizePromptSkillHistorySortOption(lastNonRelevantSort, isPromptSkillWorkspace) as SortOption)
 			setLastNonRelevantSort(null)
 		}
-	}, [searchQuery, sortOption, lastNonRelevantSort])
+	}, [effectiveSortOption, isPromptSkillWorkspace, searchQuery, sortOption, lastNonRelevantSort])
 
 	const handleHistorySelect = useCallback((itemId: string, checked: boolean) => {
 		setSelectedItems((prev) => {
 			if (checked) {
 				return [...prev, itemId]
-			} else {
-				return prev.filter((id) => id !== itemId)
 			}
+			return prev.filter((id) => id !== itemId)
 		})
 	}, [])
 
@@ -205,7 +224,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			: tasks
 
 		results.sort((a, b) => {
-			switch (sortOption) {
+			switch (effectiveSortOption) {
 				case "oldest":
 					return a.ts - b.ts
 				case "mostExpensive":
@@ -228,11 +247,11 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		})
 
 		return results
-	}, [tasks, searchQuery, fuse, sortOption])
+	}, [tasks, searchQuery, fuse, effectiveSortOption])
 
 	// Group tasks into "Today" and "Older" (only for date-based sorts)
 	const { groupedTasks, groupCounts, groupLabels } = useMemo(() => {
-		const isDateSort = sortOption === "newest" || sortOption === "oldest"
+		const isDateSort = effectiveSortOption === "newest" || effectiveSortOption === "oldest"
 
 		if (!isDateSort) {
 			// No grouping for non-date sorts
@@ -267,7 +286,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			groupCounts: groups.map((g) => g.tasks.length),
 			groupLabels: groups.map((g) => g.label),
 		}
-	}, [taskHistorySearchResults, sortOption])
+	}, [taskHistorySearchResults, effectiveSortOption])
 
 	// Calculate total size of selected items
 	const selectedItemsSize = useMemo(() => {
@@ -304,8 +323,8 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 						onInput={(e) => {
 							const newValue = (e.target as HTMLInputElement)?.value
 							setSearchQuery(newValue)
-							if (newValue && !searchQuery && sortOption !== "mostRelevant") {
-								setLastNonRelevantSort(sortOption)
+							if (newValue && !searchQuery && effectiveSortOption !== "mostRelevant") {
+								setLastNonRelevantSort(effectiveSortOption)
 								setSortOption("mostRelevant")
 							}
 						}}
@@ -324,20 +343,18 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 					<Select
 						onValueChange={(value) => {
 							// Handle sort options
-							if (
-								value === "newest" ||
-								value === "oldest" ||
-								value === "mostExpensive" ||
-								value === "mostTokens" ||
-								value === "mostRelevant"
-							) {
+							if (HISTORY_SORT_OPTIONS.includes(value)) {
 								if (value === "mostRelevant" && !searchQuery) {
 									// Don't allow selecting mostRelevant without a search query
 									return
 								}
-								setSortOption(value as SortOption)
-								if (value !== "mostRelevant") {
-									setLastNonRelevantSort(value as SortOption)
+								const nextSortOption = normalizePromptSkillHistorySortOption(
+									value as SortOption,
+									isPromptSkillWorkspace,
+								) as SortOption
+								setSortOption(nextSortOption)
+								if (nextSortOption !== "mostRelevant") {
+									setLastNonRelevantSort(nextSortOption)
 								}
 							}
 							// Handle filter toggles
@@ -347,18 +364,16 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 								setShowFavoritesOnly(!showFavoritesOnly)
 							}
 						}}
-						value={sortOption}>
+						value={effectiveSortOption}>
 						<SelectTrigger className="border-0 cursor-pointer" showIcon={false}>
 							<FunnelIcon className="!size-2 text-foreground" />
 						</SelectTrigger>
 						<SelectContent position="popper">
-							{Object.entries(HISTORY_FILTERS).map(([key, value]) => {
-								const isSortOption = ["newest", "oldest", "mostExpensive", "mostTokens", "mostRelevant"].includes(
-									key,
-								)
+							{historyFilterEntries.map(([key, value]) => {
+								const isSortOption = HISTORY_SORT_OPTIONS.includes(key)
 								const isFilterOption = ["workspaceOnly", "favoritesOnly"].includes(key)
 								const isSelected = isSortOption
-									? sortOption === key
+									? effectiveSortOption === key
 									: key === "workspaceOnly"
 										? showCurrentWorkspaceOnly
 										: key === "favoritesOnly"
@@ -460,7 +475,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 }
 
 // https://gist.github.com/evenfrost/1ba123656ded32fb7a0cd4651efd4db0
-export const highlight = (fuseSearchResult: FuseResult<any>[], highlightClassName: string = "history-item-highlight") => {
+export const highlight = (fuseSearchResult: FuseResult<any>[], highlightClassName = "history-item-highlight") => {
 	const set = (obj: Record<string, any>, path: string, value: any) => {
 		const pathValue = path.split(".")
 		let i: number

@@ -14,6 +14,8 @@ import {
 } from "lucide-react"
 import { memo, useCallback, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { shouldShowClineCostMetadata } from "@/integrations/promptskill/policy"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { formatLargeNumber, formatSize } from "@/utils/format"
@@ -36,7 +38,10 @@ const HistoryViewItem = ({
 	handleHistorySelect,
 	selectedItems,
 }: HistoryViewItemProps) => {
+	const { isPromptSkillWorkspace } = useExtensionState()
 	const [expanded, setExpanded] = useState(false)
+	// PromptSkill: hosted assessments hide Cline cost metadata from candidates.
+	const shouldShowCostMetadata = shouldShowClineCostMetadata(isPromptSkillWorkspace)
 
 	const isFavoritedItem = useMemo(
 		() => pendingFavoriteToggles[item.id] ?? item.isFavorited,
@@ -140,7 +145,9 @@ const HistoryViewItem = ({
 					<div className="flex items-center justify-between w-full">
 						<div className="text-description text-xs uppercase">{formatDate(item.ts)}</div>
 						<div className="self-end flex items-center text-xs">
-							<span className="text-description">${item.totalCost?.toFixed(4) ?? 0}</span>
+							{shouldShowCostMetadata && (
+								<span className="text-description">${item.totalCost?.toFixed(4) ?? 0}</span>
+							)}
 							{expanded ? (
 								<ChevronsDownUpIcon className="text-description" />
 							) : (

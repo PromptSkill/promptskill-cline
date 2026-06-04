@@ -1,6 +1,7 @@
 import { Empty, EmptyRequest } from "@shared/proto/cline/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/cline/models"
 import { readMcpMarketplaceCatalogFromCache } from "@/core/storage/disk"
+import { shouldRunClineWebviewStartupRefreshes } from "@/integrations/promptskill/policy"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { GlobalStateAndSettings } from "@/shared/storage/state-keys"
@@ -22,6 +23,12 @@ import { sendOpenRouterModelsEvent } from "../models/subscribeToOpenRouterModels
  */
 export async function initializeWebview(controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	try {
+		// PromptSkill: candidate workspaces use backend-locked provider config and no MCP/telemetry UI, so skip
+		// upstream launch refreshes that only feed hidden settings, pricing, marketplace, and telemetry surfaces.
+		if (!shouldRunClineWebviewStartupRefreshes()) {
+			return Empty.create({})
+		}
+
 		// Post last cached models as soon as possible for immediate availability in the UI
 		const lastCachedModels = await controller.readOpenRouterModels()
 		if (lastCachedModels) {

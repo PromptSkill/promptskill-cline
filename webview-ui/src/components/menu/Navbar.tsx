@@ -64,7 +64,7 @@ export const Navbar = () => {
 			},
 		]
 
-		// PromptSkill: candidates should not manage MCP servers or Cline settings inside assessment workspaces.
+		// PromptSkill: candidates should not manage MCP, Cline account, or settings inside assessment workspaces.
 		return filterPromptSkillNavigationTabs(tabs, isPromptSkillWorkspace)
 	}, [navigateToAccount, navigateToChat, navigateToHistory, navigateToMcp, navigateToSettings, isPromptSkillWorkspace])
 

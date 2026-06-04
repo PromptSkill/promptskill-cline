@@ -1,4 +1,5 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
+import type { ModelInfo } from "@shared/api"
 import { findLastIndex } from "@shared/array"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
@@ -13,23 +14,20 @@ import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mc
 import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import {
-	basetenDefaultModelId,
-	basetenModels,
-	groqDefaultModelId,
-	groqModels,
-	type ModelInfo,
-	openRouterDefaultModelId,
-	openRouterDefaultModelInfo,
-	requestyDefaultModelId,
-	requestyDefaultModelInfo,
-} from "../../../src/shared/api"
 import { Environment } from "../../../src/shared/config-types"
 import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
 import {
+	shouldRefreshClineModelCatalogs,
+	shouldShowClineAccountControls,
 	shouldShowClineMcpControls,
 	shouldShowClineModelFooter,
 	shouldShowClineSettings,
+	shouldShowClineWorktreeControls,
+	shouldSubscribeToClineAccountControls,
+	shouldSubscribeToClineDynamicModelFeeds,
+	shouldSubscribeToClineMcpFeeds,
+	shouldSubscribeToClineSettingsControls,
+	shouldSubscribeToClineWorktreeControls,
 } from "../integrations/promptskill/policy"
 import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "../services/grpc-client"
 
@@ -127,6 +125,13 @@ export interface ExtensionStateContextType extends ExtensionState {
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
 
+type DefaultModelCatalogs = {
+	openRouterModels: Record<string, ModelInfo>
+	requestyModels: Record<string, ModelInfo>
+	groqModels: Record<string, ModelInfo>
+	basetenModels: Record<string, ModelInfo>
+}
+
 export const ExtensionStateContextProvider: React.FC<{
 	children: React.ReactNode
 }> = ({ children }) => {
@@ -140,7 +145,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [showAccount, setShowAccount] = useState(false)
 	const [showWorktrees, setShowWorktrees] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
-	const isPromptSkillWorkspaceRef = useRef(false)
+	const isPromptSkillWorkspaceRef = useRef(true)
 
 	// Helper for MCP view
 	const closeMcpView = useCallback(() => {
@@ -224,6 +229,11 @@ export const ExtensionStateContextProvider: React.FC<{
 	}, [setShowSettings, closeMcpView, setShowAccount, setShowWorktrees, setShowHistory])
 
 	const navigateToAccount = useCallback(() => {
+		// PromptSkill: candidate workspaces should not load Cline account/org surfaces.
+		if (!shouldShowClineAccountControls(isPromptSkillWorkspaceRef.current)) {
+			return
+		}
+
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
@@ -232,6 +242,11 @@ export const ExtensionStateContextProvider: React.FC<{
 	}, [setShowSettings, closeMcpView, setShowHistory, setShowWorktrees, setShowAccount])
 
 	const navigateToWorktrees = useCallback(() => {
+		// PromptSkill: candidate workspaces do not expose upstream worktree controls.
+		if (!shouldShowClineWorktreeControls(isPromptSkillWorkspaceRef.current)) {
+			return
+		}
+
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
@@ -320,9 +335,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [onboardingModels, setOnboardingModels] = useState<OnboardingModelGroup | undefined>(undefined)
 
 	const [clineModels, setClineModels] = useState<Record<string, ModelInfo> | null>(null)
-	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
-		[openRouterDefaultModelId]: openRouterDefaultModelInfo,
-	})
+	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({})
 	const [vercelAiGatewayModels, setVercelAiGatewayModels] = useState<Record<string, ModelInfo>>({})
 	const [hicapModels, setHicapModels] = useState<Record<string, ModelInfo>>({})
 	const [liteLlmModels, setLiteLlmModels] = useState<Record<string, ModelInfo>>({})
@@ -330,16 +343,9 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [availableTerminalProfiles, setAvailableTerminalProfiles] = useState<TerminalProfile[]>([])
 
 	const [openAiModels, _setOpenAiModels] = useState<string[]>([])
-	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({
-		[requestyDefaultModelId]: requestyDefaultModelInfo,
-	})
-	const [groqModelsState, setGroqModels] = useState<Record<string, ModelInfo>>({
-		[groqDefaultModelId]: groqModels[groqDefaultModelId],
-	})
-	const [basetenModelsState, setBasetenModels] = useState<Record<string, ModelInfo>>({
-		...basetenModels,
-		[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
-	})
+	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({})
+	const [groqModelsState, setGroqModels] = useState<Record<string, ModelInfo>>({})
+	const [basetenModelsState, setBasetenModels] = useState<Record<string, ModelInfo>>({})
 	const [huggingFaceModels, setHuggingFaceModels] = useState<Record<string, ModelInfo>>({})
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
@@ -359,6 +365,9 @@ export const ExtensionStateContextProvider: React.FC<{
 	const liteLlmModelsUnsubscribeRef = useRef<(() => void) | null>(null)
 	const workspaceUpdatesUnsubscribeRef = useRef<(() => void) | null>(null)
 	const relinquishControlUnsubscribeRef = useRef<(() => void) | null>(null)
+	const defaultModelCatalogsRef = useRef<DefaultModelCatalogs | null>(null)
+	const hasRequestedDefaultModelCatalogsRef = useRef(false)
+	const hasInitializedWebviewRef = useRef(false)
 
 	// Add ref for callbacks
 	const relinquishControlCallbacks = useRef<Set<() => void>>(new Set())
@@ -371,6 +380,64 @@ export const ExtensionStateContextProvider: React.FC<{
 		}
 	}, [])
 	const mcpServersSubscriptionRef = useRef<(() => void) | null>(null)
+
+	const mergeOpenRouterModelsWithDefaults = useCallback((models: Record<string, ModelInfo>) => {
+		setOpenRouterModels({
+			...(defaultModelCatalogsRef.current?.openRouterModels ?? {}),
+			...models,
+		})
+	}, [])
+
+	const mergeBasetenModelsWithDefaults = useCallback((models: Record<string, ModelInfo>) => {
+		setBasetenModels({
+			...(defaultModelCatalogsRef.current?.basetenModels ?? {}),
+			...models,
+		})
+	}, [])
+
+	const loadDefaultModelCatalogs = useCallback(async () => {
+		if (hasRequestedDefaultModelCatalogsRef.current) {
+			return
+		}
+
+		hasRequestedDefaultModelCatalogsRef.current = true
+
+		try {
+			const {
+				basetenDefaultModelId,
+				basetenModels,
+				groqDefaultModelId,
+				groqModels,
+				openRouterDefaultModelId,
+				openRouterDefaultModelInfo,
+				requestyDefaultModelId,
+				requestyDefaultModelInfo,
+			} = await import("../../../src/shared/api")
+			const defaultModelCatalogs: DefaultModelCatalogs = {
+				openRouterModels: {
+					[openRouterDefaultModelId]: openRouterDefaultModelInfo,
+				},
+				requestyModels: {
+					[requestyDefaultModelId]: requestyDefaultModelInfo,
+				},
+				groqModels: {
+					[groqDefaultModelId]: groqModels[groqDefaultModelId],
+				},
+				basetenModels: {
+					...basetenModels,
+					[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
+				},
+			}
+
+			defaultModelCatalogsRef.current = defaultModelCatalogs
+			setOpenRouterModels((models) => ({ ...defaultModelCatalogs.openRouterModels, ...models }))
+			setRequestyModels((models) => ({ ...defaultModelCatalogs.requestyModels, ...models }))
+			setGroqModels((models) => ({ ...defaultModelCatalogs.groqModels, ...models }))
+			setBasetenModels((models) => ({ ...defaultModelCatalogs.basetenModels, ...models }))
+		} catch (error) {
+			console.error("Failed to load default model catalogs:", error)
+		}
+	}, [])
 
 	// Subscribe to state updates and UI events using the gRPC streaming API
 	useEffect(() => {
@@ -428,22 +495,24 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		})
 
-		// Subscribe to MCP button clicked events with webview type
-		mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
-			{},
-			{
-				onResponse: () => {
-					console.log("[DEBUG] Received mcpButtonClicked event from gRPC stream")
-					navigateToMcp()
+		if (shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspaceRef.current)) {
+			// Subscribe to MCP button clicked events with webview type
+			mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
+				{},
+				{
+					onResponse: () => {
+						console.log("[DEBUG] Received mcpButtonClicked event from gRPC stream")
+						navigateToMcp()
+					},
+					onError: (error) => {
+						console.error("Error in mcpButtonClicked subscription:", error)
+					},
+					onComplete: () => {
+						console.log("mcpButtonClicked subscription completed")
+					},
 				},
-				onError: (error) => {
-					console.error("Error in mcpButtonClicked subscription:", error)
-				},
-				onComplete: () => {
-					console.log("mcpButtonClicked subscription completed")
-				},
-			},
-		)
+			)
+		}
 
 		// Set up history button clicked subscription with webview type
 		historyButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToHistoryButtonClicked(
@@ -479,52 +548,61 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		)
 
-		// Subscribe to MCP servers updates
-		mcpServersSubscriptionRef.current = McpServiceClient.subscribeToMcpServers(EmptyRequest.create(), {
-			onResponse: (response) => {
-				console.log("[DEBUG] Received MCP servers update from gRPC stream")
-				if (response.mcpServers) {
-					setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
-				}
-			},
-			onError: (error) => {
-				console.error("Error in MCP servers subscription:", error)
-			},
-			onComplete: () => {
-				console.log("MCP servers subscription completed")
-			},
-		})
-
-		// Set up settings button clicked subscription
-		settingsButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToSettingsButtonClicked(EmptyRequest.create({}), {
-			onResponse: () => {
-				// When settings button is clicked, navigate to settings
-				navigateToSettings()
-			},
-			onError: (error) => {
-				console.error("Error in settings button clicked subscription:", error)
-			},
-			onComplete: () => {
-				console.log("Settings button clicked subscription completed")
-			},
-		})
-
-		// Set up worktrees button clicked subscription
-		worktreesButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToWorktreesButtonClicked(
-			EmptyRequest.create({}),
-			{
-				onResponse: () => {
-					// When worktrees button is clicked, navigate to worktrees
-					navigateToWorktrees()
+		if (shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspaceRef.current)) {
+			// Subscribe to MCP servers updates
+			mcpServersSubscriptionRef.current = McpServiceClient.subscribeToMcpServers(EmptyRequest.create(), {
+				onResponse: (response) => {
+					console.log("[DEBUG] Received MCP servers update from gRPC stream")
+					if (response.mcpServers) {
+						setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
+					}
 				},
 				onError: (error) => {
-					console.error("Error in worktrees button clicked subscription:", error)
+					console.error("Error in MCP servers subscription:", error)
 				},
 				onComplete: () => {
-					console.log("Worktrees button clicked subscription completed")
+					console.log("MCP servers subscription completed")
 				},
-			},
-		)
+			})
+		}
+
+		if (shouldSubscribeToClineSettingsControls(isPromptSkillWorkspaceRef.current)) {
+			// Set up settings button clicked subscription
+			settingsButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToSettingsButtonClicked(
+				EmptyRequest.create({}),
+				{
+					onResponse: () => {
+						// When settings button is clicked, navigate to settings
+						navigateToSettings()
+					},
+					onError: (error) => {
+						console.error("Error in settings button clicked subscription:", error)
+					},
+					onComplete: () => {
+						console.log("Settings button clicked subscription completed")
+					},
+				},
+			)
+		}
+
+		if (shouldSubscribeToClineWorktreeControls(isPromptSkillWorkspaceRef.current)) {
+			// Set up worktrees button clicked subscription
+			worktreesButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToWorktreesButtonClicked(
+				EmptyRequest.create({}),
+				{
+					onResponse: () => {
+						// When worktrees button is clicked, navigate to worktrees
+						navigateToWorktrees()
+					},
+					onError: (error) => {
+						console.error("Error in worktrees button clicked subscription:", error)
+					},
+					onComplete: () => {
+						console.log("Worktrees button clicked subscription completed")
+					},
+				},
+			)
+		}
 
 		// Subscribe to partial message events
 		partialMessageUnsubscribeRef.current = UiServiceClient.subscribeToPartialMessage(EmptyRequest.create({}), {
@@ -559,74 +637,68 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		})
 
-		// Subscribe to MCP marketplace catalog updates
-		mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
-			onResponse: (catalog) => {
-				console.log("[DEBUG] Received MCP marketplace catalog update from gRPC stream")
-				setMcpMarketplaceCatalog(catalog)
-			},
-			onError: (error) => {
-				console.error("Error in MCP marketplace catalog subscription:", error)
-			},
-			onComplete: () => {
-				console.log("MCP marketplace catalog subscription completed")
-			},
-		})
-
-		// Subscribe to OpenRouter models updates
-		openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(EmptyRequest.create({}), {
-			onResponse: (response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
-				setOpenRouterModels({
-					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
-					...models,
-				})
-			},
-			onError: (error) => {
-				console.error("Error in OpenRouter models subscription:", error)
-			},
-			onComplete: () => {
-				console.log("OpenRouter models subscription completed")
-			},
-		})
-
-		// Subscribe to LiteLLM models updates
-		liteLlmModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToLiteLlmModels(EmptyRequest.create({}), {
-			onResponse: (response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
-				setLiteLlmModels(models)
-			},
-			onError: (error) => {
-				console.error("Error in LiteLLM models subscription:", error)
-			},
-			onComplete: () => {
-				console.log("LiteLLM models subscription completed")
-			},
-		})
-
-		// Initialize webview using gRPC
-		UiServiceClient.initializeWebview(EmptyRequest.create({}))
-			.then(() => {
-				console.log("[DEBUG] Webview initialization completed via gRPC")
+		if (shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspaceRef.current)) {
+			// Subscribe to MCP marketplace catalog updates
+			mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
+				onResponse: (catalog) => {
+					console.log("[DEBUG] Received MCP marketplace catalog update from gRPC stream")
+					setMcpMarketplaceCatalog(catalog)
+				},
+				onError: (error) => {
+					console.error("Error in MCP marketplace catalog subscription:", error)
+				},
+				onComplete: () => {
+					console.log("MCP marketplace catalog subscription completed")
+				},
 			})
-			.catch((error) => {
-				console.error("Failed to initialize webview via gRPC:", error)
+		}
+
+		if (shouldSubscribeToClineDynamicModelFeeds(isPromptSkillWorkspaceRef.current)) {
+			// Subscribe to OpenRouter models updates
+			openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(EmptyRequest.create({}), {
+				onResponse: (response: OpenRouterCompatibleModelInfo) => {
+					const models = fromProtobufModels(response.models)
+					mergeOpenRouterModelsWithDefaults(models)
+				},
+				onError: (error) => {
+					console.error("Error in OpenRouter models subscription:", error)
+				},
+				onComplete: () => {
+					console.log("OpenRouter models subscription completed")
+				},
 			})
 
-		// Set up account button clicked subscription
-		accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
-			onResponse: () => {
-				// When account button is clicked, navigate to account view
-				console.log("[DEBUG] Received account button clicked event from gRPC stream")
-				navigateToAccount()
-			},
-			onError: (error) => {
-				console.error("Error in account button clicked subscription:", error)
-			},
-			onComplete: () => {
-				console.log("Account button clicked subscription completed")
-			},
-		})
+			// Subscribe to LiteLLM models updates
+			liteLlmModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToLiteLlmModels(EmptyRequest.create({}), {
+				onResponse: (response: OpenRouterCompatibleModelInfo) => {
+					const models = fromProtobufModels(response.models)
+					setLiteLlmModels(models)
+				},
+				onError: (error) => {
+					console.error("Error in LiteLLM models subscription:", error)
+				},
+				onComplete: () => {
+					console.log("LiteLLM models subscription completed")
+				},
+			})
+		}
+
+		if (shouldSubscribeToClineAccountControls(isPromptSkillWorkspaceRef.current)) {
+			// Set up account button clicked subscription
+			accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
+				onResponse: () => {
+					// When account button is clicked, navigate to account view
+					console.log("[DEBUG] Received account button clicked event from gRPC stream")
+					navigateToAccount()
+				},
+				onError: (error) => {
+					console.error("Error in account button clicked subscription:", error)
+				},
+				onComplete: () => {
+					console.log("Account button clicked subscription completed")
+				},
+			})
+		}
 
 		// Fetch available terminal profiles on launch
 		StateServiceClient.getAvailableTerminalProfiles(EmptyRequest.create({}))
@@ -712,17 +784,191 @@ export const ExtensionStateContextProvider: React.FC<{
 		}
 	}, [])
 
+	useEffect(() => {
+		if (!didHydrateState) {
+			return
+		}
+
+		if (!isPromptSkillWorkspaceRef.current) {
+			void loadDefaultModelCatalogs()
+		}
+
+		if (shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspaceRef.current) && !mcpButtonUnsubscribeRef.current) {
+			mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
+				{},
+				{
+					onResponse: () => {
+						console.log("[DEBUG] Received mcpButtonClicked event from gRPC stream")
+						navigateToMcp()
+					},
+					onError: (error) => {
+						console.error("Error in mcpButtonClicked subscription:", error)
+					},
+					onComplete: () => {
+						console.log("mcpButtonClicked subscription completed")
+					},
+				},
+			)
+		}
+
+		if (shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspaceRef.current) && !mcpServersSubscriptionRef.current) {
+			mcpServersSubscriptionRef.current = McpServiceClient.subscribeToMcpServers(EmptyRequest.create(), {
+				onResponse: (response) => {
+					console.log("[DEBUG] Received MCP servers update from gRPC stream")
+					if (response.mcpServers) {
+						setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
+					}
+				},
+				onError: (error) => {
+					console.error("Error in MCP servers subscription:", error)
+				},
+				onComplete: () => {
+					console.log("MCP servers subscription completed")
+				},
+			})
+		}
+
+		if (
+			shouldSubscribeToClineSettingsControls(isPromptSkillWorkspaceRef.current) &&
+			!settingsButtonClickedSubscriptionRef.current
+		) {
+			settingsButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToSettingsButtonClicked(
+				EmptyRequest.create({}),
+				{
+					onResponse: () => {
+						navigateToSettings()
+					},
+					onError: (error) => {
+						console.error("Error in settings button clicked subscription:", error)
+					},
+					onComplete: () => {
+						console.log("Settings button clicked subscription completed")
+					},
+				},
+			)
+		}
+
+		if (
+			shouldSubscribeToClineWorktreeControls(isPromptSkillWorkspaceRef.current) &&
+			!worktreesButtonClickedSubscriptionRef.current
+		) {
+			worktreesButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToWorktreesButtonClicked(
+				EmptyRequest.create({}),
+				{
+					onResponse: () => {
+						navigateToWorktrees()
+					},
+					onError: (error) => {
+						console.error("Error in worktrees button clicked subscription:", error)
+					},
+					onComplete: () => {
+						console.log("Worktrees button clicked subscription completed")
+					},
+				},
+			)
+		}
+
+		if (shouldSubscribeToClineMcpFeeds(isPromptSkillWorkspaceRef.current) && !mcpMarketplaceUnsubscribeRef.current) {
+			mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
+				onResponse: (catalog) => {
+					console.log("[DEBUG] Received MCP marketplace catalog update from gRPC stream")
+					setMcpMarketplaceCatalog(catalog)
+				},
+				onError: (error) => {
+					console.error("Error in MCP marketplace catalog subscription:", error)
+				},
+				onComplete: () => {
+					console.log("MCP marketplace catalog subscription completed")
+				},
+			})
+		}
+
+		if (shouldSubscribeToClineDynamicModelFeeds(isPromptSkillWorkspaceRef.current)) {
+			if (!openRouterModelsUnsubscribeRef.current) {
+				openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(
+					EmptyRequest.create({}),
+					{
+						onResponse: (response: OpenRouterCompatibleModelInfo) => {
+							const models = fromProtobufModels(response.models)
+							mergeOpenRouterModelsWithDefaults(models)
+						},
+						onError: (error) => {
+							console.error("Error in OpenRouter models subscription:", error)
+						},
+						onComplete: () => {
+							console.log("OpenRouter models subscription completed")
+						},
+					},
+				)
+			}
+
+			if (!liteLlmModelsUnsubscribeRef.current) {
+				liteLlmModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToLiteLlmModels(EmptyRequest.create({}), {
+					onResponse: (response: OpenRouterCompatibleModelInfo) => {
+						const models = fromProtobufModels(response.models)
+						setLiteLlmModels(models)
+					},
+					onError: (error) => {
+						console.error("Error in LiteLLM models subscription:", error)
+					},
+					onComplete: () => {
+						console.log("LiteLLM models subscription completed")
+					},
+				})
+			}
+		}
+
+		if (
+			shouldSubscribeToClineAccountControls(isPromptSkillWorkspaceRef.current) &&
+			!accountButtonClickedSubscriptionRef.current
+		) {
+			accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
+				onResponse: () => {
+					console.log("[DEBUG] Received account button clicked event from gRPC stream")
+					navigateToAccount()
+				},
+				onError: (error) => {
+					console.error("Error in account button clicked subscription:", error)
+				},
+				onComplete: () => {
+					console.log("Account button clicked subscription completed")
+				},
+			})
+		}
+
+		if (hasInitializedWebviewRef.current) {
+			return
+		}
+
+		hasInitializedWebviewRef.current = true
+
+		// PromptSkill: initialize after hydration so upstream cached model/MCP events are only requested once
+		// non-PromptSkill subscribers are attached; candidate workspaces still skip hidden refreshes server-side.
+		UiServiceClient.initializeWebview(EmptyRequest.create({}))
+			.then(() => {
+				console.log("[DEBUG] Webview initialization completed via gRPC")
+			})
+			.catch((error) => {
+				console.error("Failed to initialize webview via gRPC:", error)
+			})
+	}, [
+		didHydrateState,
+		loadDefaultModelCatalogs,
+		mergeOpenRouterModelsWithDefaults,
+		navigateToAccount,
+		navigateToMcp,
+		navigateToSettings,
+		navigateToWorktrees,
+	])
+
 	const refreshOpenRouterModels = useCallback(() => {
 		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))
 			.then((response: OpenRouterCompatibleModelInfo) => {
 				const models = fromProtobufModels(response.models)
-				setOpenRouterModels({
-					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
-					...models,
-				})
+				mergeOpenRouterModelsWithDefaults(models)
 			})
 			.catch((error: Error) => console.error("Failed to refresh OpenRouter models:", error))
-	}, [])
+	}, [mergeOpenRouterModelsWithDefaults])
 
 	const refreshHicapModels = useCallback(() => {
 		ModelsServiceClient.refreshHicapModels(EmptyRequest.create({}))
@@ -747,13 +993,10 @@ export const ExtensionStateContextProvider: React.FC<{
 	const refreshBasetenModels = useCallback(() => {
 		ModelsServiceClient.refreshBasetenModelsRpc(EmptyRequest.create({}))
 			.then((response) => {
-				setBasetenModels({
-					[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
-					...fromProtobufModels(response.models),
-				})
+				mergeBasetenModelsWithDefaults(fromProtobufModels(response.models))
 			})
 			.catch((err) => console.error("Failed to refresh Baseten models:", err))
-	}, [])
+	}, [mergeBasetenModelsWithDefaults])
 
 	const refreshVercelAiGatewayModels = useCallback(() => {
 		ModelsServiceClient.refreshVercelAiGatewayModelsRpc(EmptyRequest.create({}))
@@ -766,6 +1009,14 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	// Auto-refresh model lists on API key availability
 	useEffect(() => {
+		if (!didHydrateState) {
+			return
+		}
+
+		if (!shouldRefreshClineModelCatalogs(state.isPromptSkillWorkspace)) {
+			return
+		}
+
 		if (!openRouterModels || Object.keys(openRouterModels).length <= 1) {
 			refreshOpenRouterModels()
 		}
@@ -781,6 +1032,8 @@ export const ExtensionStateContextProvider: React.FC<{
 	}, [
 		refreshOpenRouterModels,
 		refreshVercelAiGatewayModels,
+		didHydrateState,
+		state.isPromptSkillWorkspace,
 		state?.apiConfiguration?.basetenApiKey,
 		refreshBasetenModels,
 		state?.apiConfiguration?.liteLlmApiKey,
@@ -799,12 +1052,27 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	// Auto-refresh Cline models when provider is cline
 	useEffect(() => {
+		if (!didHydrateState) {
+			return
+		}
+
+		if (!shouldRefreshClineModelCatalogs(state.isPromptSkillWorkspace)) {
+			return
+		}
+
 		const hasClineProvider =
 			state.apiConfiguration?.actModeApiProvider === "cline" || state.apiConfiguration?.planModeApiProvider === "cline"
 		if (hasClineProvider && clineModels === null) {
 			refreshClineModels()
 		}
-	}, [state.apiConfiguration?.actModeApiProvider, state.apiConfiguration?.planModeApiProvider, clineModels, refreshClineModels])
+	}, [
+		state.isPromptSkillWorkspace,
+		didHydrateState,
+		state.apiConfiguration?.actModeApiProvider,
+		state.apiConfiguration?.planModeApiProvider,
+		clineModels,
+		refreshClineModels,
+	])
 
 	const contextValue: ExtensionStateContextType = {
 		...state,

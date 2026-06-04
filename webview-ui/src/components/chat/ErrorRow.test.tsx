@@ -14,6 +14,12 @@ vi.mock("@/context/ClineAuthContext", () => ({
 	handleSignOut: vi.fn(),
 }))
 
+vi.mock("@/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({
+		isPromptSkillWorkspace: false,
+	}),
+}))
+
 // Mock CreditLimitError component
 vi.mock("@/components/chat/CreditLimitError", () => ({
 	default: ({ message }: { message: string }) => <div data-testid="credit-limit-error">{message}</div>,

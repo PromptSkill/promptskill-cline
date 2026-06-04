@@ -7,18 +7,21 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { AtSignIcon, PlusIcon } from "lucide-react"
 import type React from "react"
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import styled from "styled-components"
 import ContextMenu from "@/components/chat/ContextMenu"
 import { CHAT_CONSTANTS } from "@/components/chat/chat-view/constants"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
-import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
-import { shouldShowClineModelFooter } from "@/integrations/promptskill/policy"
+import {
+	shouldShowClineMcpControls,
+	shouldShowClineModelFooter,
+	shouldShowClineRulesControls,
+} from "@/integrations/promptskill/policy"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
 import {
@@ -42,10 +45,12 @@ import {
 	slashCommandRegexGlobal,
 	validateSlashCommand,
 } from "@/utils/slash-commands"
-import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
-import ServersToggleModal from "./ServersToggleModal"
+import { useChatModelSelection } from "./chatModelSelection"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
+
+const ClineRulesToggleModal = lazy(() => import("../cline-rules/ClineRulesToggleModal"))
+const ServersToggleModal = lazy(() => import("./ServersToggleModal"))
 
 const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> => {
 	return new Promise((resolve, reject) => {
@@ -1068,9 +1073,14 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			navigateToSettingsModelPicker({ targetSection: "api-config" })
 		}
 
+		const { modeFields, selectedModelId, selectedProvider } = useChatModelSelection(
+			apiConfiguration,
+			mode,
+			isPromptSkillWorkspace,
+		)
+
 		// Get model display name
 		const modelDisplayName = useMemo(() => {
-			const { selectedProvider, selectedModelId } = normalizeApiConfiguration(apiConfiguration, mode)
 			const {
 				vsCodeLmModelSelector,
 				togetherModelId,
@@ -1079,7 +1089,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				liteLlmModelId,
 				requestyModelId,
 				vercelAiGatewayModelId,
-			} = getModeSpecificFields(apiConfiguration, mode)
+			} = modeFields
 			const unknownModel = "unknown"
 
 			if (!apiConfiguration) {
@@ -1109,7 +1119,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				default:
 					return `${selectedProvider}:${selectedModelId}`
 			}
-		}, [apiConfiguration, mode])
+		}, [apiConfiguration, modeFields, selectedModelId, selectedProvider])
 
 		// Function to show error message for unsupported files for drag and drop
 		const showUnsupportedFileErrorMessage = () => {
@@ -1573,9 +1583,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								</TooltipTrigger>
 							</Tooltip>
 
-							<ServersToggleModal />
+							{shouldShowClineMcpControls(isPromptSkillWorkspace) && (
+								<Suspense fallback={null}>
+									<ServersToggleModal />
+								</Suspense>
+							)}
 
-							<ClineRulesToggleModal />
+							{shouldShowClineRulesControls(isPromptSkillWorkspace) && (
+								<Suspense fallback={null}>
+									<ClineRulesToggleModal />
+								</Suspense>
+							)}
 
 							{/* PromptSkill: the assessment runtime controls the provider and model. */}
 							{shouldShowClineModelFooter(isPromptSkillWorkspace) && (

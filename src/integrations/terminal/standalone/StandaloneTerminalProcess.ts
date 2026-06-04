@@ -12,7 +12,7 @@ import { telemetryService } from "@services/telemetry"
 import { ChildProcess, spawn } from "child_process"
 import { EventEmitter } from "events"
 import { terminateProcessTree } from "@/utils/process-termination"
-
+import { stripAnsi } from "../ansiUtils"
 import {
 	isCompilingOutput,
 	MAX_FULL_OUTPUT_SIZE,
@@ -269,9 +269,10 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 	getUnretrievedOutput(): string {
 		const unretrieved = this.fullOutput.slice(this.lastRetrievedIndex)
 		this.lastRetrievedIndex = this.fullOutput.length
+		const sanitizedUnretrieved = stripAnsi(unretrieved)
 
 		// Truncate if too many lines to prevent context overflow
-		const lines = unretrieved.split("\n")
+		const lines = sanitizedUnretrieved.split("\n")
 		if (lines.length > MAX_UNRETRIEVED_LINES) {
 			const first = lines.slice(0, TRUNCATE_KEEP_LINES)
 			const last = lines.slice(-TRUNCATE_KEEP_LINES)
@@ -279,7 +280,7 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 			return this.removeLastLineArtifacts([...first, `\n... (${skipped} lines truncated) ...\n`, ...last].join("\n"))
 		}
 
-		return this.removeLastLineArtifacts(unretrieved)
+		return this.removeLastLineArtifacts(sanitizedUnretrieved)
 	}
 
 	getCompletionDetails(): TerminalCompletionDetails {

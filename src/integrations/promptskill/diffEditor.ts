@@ -330,6 +330,20 @@ export function showPromptSkillEditableDiffDocument(uri: vscode.Uri): Thenable<v
 	})
 }
 
+export async function revealPromptSkillDiffEditor({
+	uri,
+	originalContent,
+	diffViewUriScheme,
+	editType,
+}: PromptSkillDiffEditorOptions): Promise<vscode.TextEditor> {
+	return openPromptSkillDiffEditorWithTheiaFallback({
+		uri,
+		originalContent,
+		diffViewUriScheme,
+		editType,
+	})
+}
+
 function findPromptSkillDiffTab(diffViewUriScheme: string, uri: vscode.Uri): vscode.Tab | undefined {
 	return vscode.window.tabGroups.all
 		.flatMap((group) => group.tabs)

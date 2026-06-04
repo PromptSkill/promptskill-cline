@@ -1,13 +1,14 @@
 import type { ClineMessage } from "@shared/ExtensionMessage"
 import type React from "react"
-import { useMemo } from "react"
-import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
+import { lazy, Suspense, useMemo } from "react"
 import ChatRow from "@/components/chat/ChatRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import type { MessageHandlers } from "../../types/chatTypes"
 import { findReasoningForApiReq, isTextMessagePendingToolCall, isToolGroup } from "../../utils/messageUtils"
 import { ToolGroupRenderer } from "./ToolGroupRenderer"
+
+const BrowserSessionRow = lazy(() => import("@/components/chat/BrowserSessionRow"))
 
 interface MessageRendererProps {
 	index: number
@@ -84,16 +85,18 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	// Browser session group
 	if (Array.isArray(messageOrGroup)) {
 		return (
-			<BrowserSessionRow
-				expandedRows={expandedRows}
-				isLast={isLastMessage}
-				key={messageOrGroup[0]?.ts}
-				lastModifiedMessage={modifiedMessages.at(-1)}
-				messages={messageOrGroup}
-				onHeightChange={onHeightChange}
-				onSetQuote={onSetQuote}
-				onToggleExpand={onToggleExpand}
-			/>
+			<Suspense fallback={null}>
+				<BrowserSessionRow
+					expandedRows={expandedRows}
+					isLast={isLastMessage}
+					key={messageOrGroup[0]?.ts}
+					lastModifiedMessage={modifiedMessages.at(-1)}
+					messages={messageOrGroup}
+					onHeightChange={onHeightChange}
+					onSetQuote={onSetQuote}
+					onToggleExpand={onToggleExpand}
+				/>
+			</Suspense>
 		)
 	}
 
