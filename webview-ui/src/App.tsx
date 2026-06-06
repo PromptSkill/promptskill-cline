@@ -2,6 +2,8 @@ import type { Boolean, EmptyRequest } from "@shared/proto/cline/common"
 import { lazy, Suspense, useCallback, useEffect, useState } from "react"
 import ChatView from "./components/chat/ChatView"
 import { useExtensionState } from "./context/ExtensionStateContext"
+import { notifyPromptSkillAiChatReadyAfterPaint } from "./integrations/promptskill/aiChatReady"
+import { PromptSkillClineLoader, shouldShowPromptSkillHydrationLoader } from "./integrations/promptskill/PromptSkillClineLoader"
 import {
 	shouldShowClineAccountControls,
 	shouldShowClineKanbanModal,
@@ -115,8 +117,17 @@ const AppContent = () => {
 		}
 	}, [])
 
+	useEffect(() => {
+		if (!didHydrateState) {
+			return
+		}
+
+		return notifyPromptSkillAiChatReadyAfterPaint(isPromptSkillWorkspace)
+	}, [didHydrateState, isPromptSkillWorkspace])
+
 	if (!didHydrateState) {
-		return null
+		// PromptSkill: candidate chat should show the same loader during state hydration, not a blank panel.
+		return shouldShowPromptSkillHydrationLoader() ? <PromptSkillClineLoader /> : null
 	}
 
 	if (showWelcome && shouldShowClineWelcomeSurfaces(isPromptSkillWorkspace)) {

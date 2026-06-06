@@ -3,19 +3,33 @@ import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state
 import { SquareArrowOutUpRightIcon } from "lucide-react"
 import { marked } from "marked"
 import type { ComponentProps } from "react"
-import React, { memo, useEffect, useMemo, useRef, useState } from "react"
+import React, { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import rehypeHighlight, { Options } from "rehype-highlight"
 import remarkGfm from "remark-gfm"
 import type { Node } from "unist"
 import { visit } from "unist-util-visit"
-import MermaidBlock from "@/components/common/MermaidBlock"
 import { Button } from "@/components/ui/button"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
 import { WithCopyButton } from "./CopyButton"
 import UnsafeImage from "./UnsafeImage"
+
+// PromptSkill: defer Mermaid out of the initial AI chat bundle while preserving Markdown's Mermaid block path.
+const MermaidBlock = lazy(() => import("@/components/common/MermaidBlock"))
+
+type LazyMermaidBlockProps = {
+	// ReactMarkdown's pre renderer reads this prop so Mermaid blocks avoid the normal code-block wrapper.
+	className?: string
+	code: string
+}
+
+const LazyMermaidBlock = ({ code }: LazyMermaidBlockProps) => (
+	<Suspense fallback={<span className="text-description italic">Loading diagram...</span>}>
+		<MermaidBlock code={code} />
+	</Suspense>
+)
 
 function parseMarkdownIntoBlocks(markdown: string): string[] {
 	try {
@@ -44,7 +58,7 @@ const MemoizedMarkdownBlock = memo(
 						const className = props.className || ""
 						if (className.includes("language-mermaid")) {
 							const codeText = String(props.children || "")
-							return <MermaidBlock code={codeText} />
+							return <LazyMermaidBlock className="language-mermaid" code={codeText} />
 						}
 
 						// Use the async file check component for potential file paths

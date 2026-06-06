@@ -1,6 +1,5 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import mermaid from "mermaid"
 import { useEffect, useRef, useState } from "react"
 import styled from "styled-components"
 import { FileServiceClient } from "@/services/grpc-client"
@@ -36,45 +35,59 @@ const MERMAID_THEME = {
 	fillType2: "#454545",
 }
 
-mermaid.initialize({
-	startOnLoad: false,
-	securityLevel: "loose",
-	theme: "dark",
-	themeVariables: {
-		...MERMAID_THEME,
-		fontSize: "16px",
-		fontFamily: "var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif)",
+type MermaidApi = Awaited<typeof import("mermaid")>["default"]
 
-		// Additional styling
-		noteTextColor: "#ffffff",
-		noteBkgColor: "#454545",
-		noteBorderColor: "#888888",
+let mermaidPromise: Promise<MermaidApi> | undefined
 
-		// Improve contrast for special elements
-		critBorderColor: "#ff9580",
-		critBkgColor: "#803d36",
+// PromptSkill: load Mermaid only when a diagram is rendered so AI chat startup does not pay for the diagram engine.
+function loadMermaid(): Promise<MermaidApi> {
+	mermaidPromise ??= import("mermaid").then((module) => {
+		const mermaidApi = module.default
+		mermaidApi.initialize({
+			startOnLoad: false,
+			securityLevel: "loose",
+			theme: "dark",
+			themeVariables: {
+				...MERMAID_THEME,
+				fontSize: "16px",
+				fontFamily: "var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif)",
 
-		// Task diagram specific
-		taskTextColor: "#ffffff",
-		taskTextOutsideColor: "#ffffff",
-		taskTextLightColor: "#ffffff",
+				// Additional styling
+				noteTextColor: "#ffffff",
+				noteBkgColor: "#454545",
+				noteBorderColor: "#888888",
 
-		// Numbers/sections
-		sectionBkgColor: "#2d2d2d",
-		sectionBkgColor2: "#3c3c3c",
+				// Improve contrast for special elements
+				critBorderColor: "#ff9580",
+				critBkgColor: "#803d36",
 
-		// Alt sections in sequence diagrams
-		altBackground: "#2d2d2d",
+				// Task diagram specific
+				taskTextColor: "#ffffff",
+				taskTextOutsideColor: "#ffffff",
+				taskTextLightColor: "#ffffff",
 
-		// Links
-		linkColor: "#6cb6ff",
+				// Numbers/sections
+				sectionBkgColor: "#2d2d2d",
+				sectionBkgColor2: "#3c3c3c",
 
-		// Borders and lines
-		compositeBackground: "#2d2d2d",
-		compositeBorder: "#888888",
-		titleColor: "#ffffff",
-	},
-})
+				// Alt sections in sequence diagrams
+				altBackground: "#2d2d2d",
+
+				// Links
+				linkColor: "#6cb6ff",
+
+				// Borders and lines
+				compositeBackground: "#2d2d2d",
+				compositeBorder: "#888888",
+				titleColor: "#ffffff",
+			},
+		})
+
+		return mermaidApi
+	})
+
+	return mermaidPromise
+}
 
 interface MermaidBlockProps {
 	code: string
@@ -82,39 +95,59 @@ interface MermaidBlockProps {
 
 export default function MermaidBlock({ code }: MermaidBlockProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
+	const renderSequenceRef = useRef(0)
 	const [isLoading, setIsLoading] = useState(false)
 
 	// 1) Whenever `code` changes, mark that we need to re-render a new chart
 	useEffect(() => {
+		renderSequenceRef.current += 1
 		setIsLoading(true)
 	}, [code])
+
+	useEffect(() => {
+		return () => {
+			renderSequenceRef.current += 1
+		}
+	}, [])
 
 	// 2) Debounce the actual parse/render
 	useDebounceEffect(
 		() => {
+			const renderSequence = renderSequenceRef.current + 1
+			renderSequenceRef.current = renderSequence
+
 			if (containerRef.current) {
 				containerRef.current.innerHTML = ""
 			}
-			mermaid
-				.parse(code, { suppressErrors: true })
-				.then((isValid) => {
+
+			const isCurrentRender = () => renderSequenceRef.current === renderSequence
+
+			loadMermaid()
+				.then(async (mermaidApi) => {
+					const isValid = await mermaidApi.parse(code, { suppressErrors: true })
 					if (!isValid) {
 						throw new Error("Invalid or incomplete Mermaid code")
 					}
 					const id = `mermaid-${Math.random().toString(36).substring(2)}`
-					return mermaid.render(id, code)
+					return mermaidApi.render(id, code)
 				})
 				.then(({ svg }) => {
-					if (containerRef.current) {
-						containerRef.current.innerHTML = svg
+					const container = containerRef.current
+					if (container && isCurrentRender()) {
+						container.innerHTML = svg
 					}
 				})
 				.catch((err) => {
 					console.warn("Mermaid parse/render failed:", err)
-					containerRef.current!.innerHTML = code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+					const container = containerRef.current
+					if (container && isCurrentRender()) {
+						container.innerHTML = code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+					}
 				})
 				.finally(() => {
-					setIsLoading(false)
+					if (isCurrentRender()) {
+						setIsLoading(false)
+					}
 				})
 		},
 		500, // Delay 500ms
@@ -157,7 +190,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 			{isLoading && <LoadingMessage>Generating mermaid diagram...</LoadingMessage>}
 			<ButtonContainer>
 				<StyledVSCodeButton aria-label="Copy Code" onClick={handleCopyCode} title="Copy Code">
-					<span className="codicon codicon-copy"></span>
+					<span className="codicon codicon-copy" />
 				</StyledVSCodeButton>
 			</ButtonContainer>
 			<SvgContainer $isLoading={isLoading} onClick={handleClick} ref={containerRef} />

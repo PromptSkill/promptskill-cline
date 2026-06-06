@@ -3,6 +3,11 @@ import { Controller } from "@core/controller/index"
 import axios from "axios"
 import { readFile } from "fs/promises"
 import { HostProvider } from "@/hosts/host-provider"
+import {
+	promptSkillClineWebviewLoaderMarkup,
+	promptSkillClineWebviewLoaderRootAttributes,
+	promptSkillClineWebviewLoaderStyle,
+} from "@/integrations/promptskill/webviewLoader"
 import { ClineExtensionContext } from "@/shared/cline"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -118,11 +123,13 @@ export abstract class WebviewProvider {
 					img-src ${this.getCspSource()} https: data:; 
 					media-src ${this.getCspSource()} https: data: blob:;
 					script-src ${this.getCspSource()} 'nonce-${nonce}' 'unsafe-eval';">
+					${promptSkillClineWebviewLoaderStyle()}
 				<title>Cline</title>
 			</head>
 			<body>
 				<noscript>You need to enable JavaScript to run this app.</noscript>
-				<div id="root"></div>
+				<!-- PromptSkill: show a Theia-matched loader while the candidate AI chat bundle loads. -->
+				<div id="root"${promptSkillClineWebviewLoaderRootAttributes()}>${promptSkillClineWebviewLoaderMarkup()}</div>
 				<script type="module" nonce="${nonce}" src="${scriptUrl}"></script>
 				<script src="http://localhost:8097"></script> 
 			</body>
@@ -217,12 +224,14 @@ export abstract class WebviewProvider {
 					<meta charset="utf-8">
 					<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
 					<meta http-equiv="Content-Security-Policy" content="${csp.join("; ")}">
+					${promptSkillClineWebviewLoaderStyle()}
 					<link rel="stylesheet" type="text/css" href="${stylesUrl}">
 					<link href="${codiconsUrl}" rel="stylesheet" />
 					<title>Cline</title>
 				</head>
 				<body>
-					<div id="root"></div>
+					<!-- PromptSkill: show a Theia-matched loader while the candidate AI chat dev bundle loads. -->
+					<div id="root"${promptSkillClineWebviewLoaderRootAttributes()}>${promptSkillClineWebviewLoaderMarkup()}</div>
 					${reactRefresh}
 					<script type="module" src="${scriptUrl}"></script>
 				</body>

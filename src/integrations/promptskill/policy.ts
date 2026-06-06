@@ -116,3 +116,7 @@ export function promptSkillAttemptCompletionCommand(defaultCommand: string | und
 export function shouldRunClineWebviewStartupRefreshes(): boolean {
 	return !isPromptSkillWorkspace()
 }
+
+export function shouldCheckOpenAiCodexAuthentication(): boolean {
+	return !isPromptSkillWorkspace()
+}

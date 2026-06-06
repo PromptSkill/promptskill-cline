@@ -39,7 +39,11 @@ PromptSkill maintains this fork as an upstream-first fork of `cline/cline`.
   screen in the chat path, lazy-loads full upstream optional surfaces such as full history, settings/model picker,
   MCP, account/auth, worktrees, onboarding/welcome marketing, browser-message rendering, checkpoints, rules
   controls, auto-approve UI, telemetry, and provider catalog/pricing code, and skips startup refreshes for hidden
-  MCP/model/telemetry surfaces.
+  MCP/model/telemetry surfaces. The candidate workspace shows a Theia-side right-panel loading state before the
+  Cline webview document can paint and keeps it until the hydrated Cline React surface posts a PromptSkill chat-ready
+  signal from the active Cline webview frame, while the Cline webview still shows a scoped Theia-matched loading
+  state before the webview bundle runs and while initial Cline state hydrates. Candidate startup skips hidden OpenAI
+  Codex auth checks plus defers Mermaid diagram rendering until a Mermaid block is actually displayed.
 - Candidate-mode telemetry and Cline SaaS error-provider suppression.
 - Theia secret-storage shim for runtime environments where the default VS Code secret storage path fails.
 - Candidate UI restrictions that hide or lock settings not intended for assessments.

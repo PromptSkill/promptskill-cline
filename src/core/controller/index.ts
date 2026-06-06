@@ -35,6 +35,7 @@ import {
 	promptSkillTelemetrySetting,
 	promptSkillWelcomeViewCompleted,
 	promptSkillYoloModeToggled,
+	shouldCheckOpenAiCodexAuthentication,
 } from "@/integrations/promptskill/policy"
 import { isPromptSkillWorkspace } from "@/integrations/promptskill/workspace"
 import { ExtensionRegistryInfo } from "@/registry"
@@ -946,9 +947,12 @@ export class Controller {
 		const banners = promptSkillBanners(BannerService.get().getActiveBanners() ?? [])
 		const welcomeBanners = promptSkillBanners(BannerService.get().getWelcomeBanners() ?? [])
 
-		// Check OpenAI Codex authentication status
-		const { openAiCodexOAuthManager } = await import("@/integrations/openai-codex/oauth")
-		const openAiCodexIsAuthenticated = await openAiCodexOAuthManager.isAuthenticated()
+		let openAiCodexIsAuthenticated = false
+		if (shouldCheckOpenAiCodexAuthentication()) {
+			// PromptSkill: candidate settings/account UI is hidden, so skip this import/check on initial chat hydration.
+			const { openAiCodexOAuthManager } = await import("@/integrations/openai-codex/oauth")
+			openAiCodexIsAuthenticated = await openAiCodexOAuthManager.isAuthenticated()
+		}
 
 		return {
 			version,
