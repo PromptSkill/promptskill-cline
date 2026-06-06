@@ -98,6 +98,8 @@
 	"overrides": {
 		"js-cookie": "3.0.7",
 		"protobufjs": "7.5.8",
-		"ws": "8.20.1"
+		"ws": "8.20.1",
+		"ast-v8-to-istanbul": "1.0.2",
+		"tinyexec": "1.2.2"
 	}
 }
