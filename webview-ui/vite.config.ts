@@ -82,24 +82,6 @@ export default defineConfig({
 		minify: !isDevBuild,
 		// Enable inline source maps for dev build
 		sourcemap: isDevBuild ? "inline" : false,
-		rollupOptions: {
-			output: {
-				entryFileNames: `assets/[name].js`,
-				// PromptSkill: keep optional Cline surfaces in local chunks so candidate startup stays chat-first.
-				chunkFileNames: `assets/[name]-[hash].js`,
-				assetFileNames: `assets/[name].[ext]`,
-				// Disable compact output for dev build
-				compact: !isDevBuild,
-				// Add generous formatting for dev build
-				...(isDevBuild && {
-					generatedCode: {
-						constBindings: false,
-						objectShorthand: false,
-						arrowFunctions: false,
-					},
-				}),
-			},
-		},
 		chunkSizeWarningLimit: 100000,
 	},
 	server: {
