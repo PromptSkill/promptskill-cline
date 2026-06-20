@@ -1,4 +1,4 @@
-import { credentials as grpcCredentials } from "@grpc/grpc-js"
+import { credentials as grpcCredentials, Metadata } from "@grpc/grpc-js"
 import { OTLPLogExporter as OTLPLogExporterGRPC } from "@opentelemetry/exporter-logs-otlp-grpc"
 import { OTLPLogExporter as OTLPLogExporterHTTP } from "@opentelemetry/exporter-logs-otlp-http"
 import { OTLPLogExporter as OTLPLogExporterProto } from "@opentelemetry/exporter-logs-otlp-proto"
@@ -34,6 +34,22 @@ export function ensurePathSuffix(url: URL, suffix: string): void {
 }
 
 /**
+ * Convert OTLP header config into gRPC metadata.
+ */
+function createGrpcMetadata(headers?: Record<string, string>): Metadata | undefined {
+	if (!headers) {
+		return undefined
+	}
+
+	const metadata = new Metadata()
+	for (const [key, value] of Object.entries(headers)) {
+		metadata.set(key, value)
+	}
+
+	return metadata
+}
+
+/**
  * Create an OTLP log exporter based on protocol
  */
 export function createOTLPLogExporter(
@@ -55,7 +71,7 @@ export function createOTLPLogExporter(
 				exporter = new OTLPLogExporterGRPC({
 					url: grpcEndpoint,
 					credentials: credentials,
-					headers,
+					metadata: createGrpcMetadata(headers),
 				})
 				break
 			}

@@ -8,7 +8,7 @@ import * as chromeLauncher from "chrome-launcher"
 import os from "os"
 import pWaitFor from "p-wait-for"
 import * as path from "path"
-// @ts-ignore
+// @ts-expect-error
 import type { LoggerMessage, ScreenshotOptions } from "puppeteer-core"
 import { Browser, connect, launch, Page, TimeoutError } from "puppeteer-core"
 import { StateManager } from "@/core/storage/StateManager"
@@ -40,17 +40,17 @@ export class BrowserSession {
 	private page?: Page
 	private currentMousePosition?: string
 	private cachedWebSocketEndpoint?: string
-	private lastConnectionAttempt: number = 0
-	private isConnectedToRemote: boolean = false
+	private lastConnectionAttempt = 0
+	private isConnectedToRemote = false
 	private useWebp: boolean
 
 	// Telemetry tracking properties
-	private sessionStartTime: number = 0
+	private sessionStartTime = 0
 	private browserActions: string[] = []
 	private ulid?: string
 	private stateManager: StateManager
 
-	constructor(stateManager: StateManager, useWebp: boolean = true) {
+	constructor(stateManager: StateManager, useWebp = true) {
 		this.stateManager = stateManager
 		this.useWebp = useWebp
 	}
@@ -394,8 +394,9 @@ export class BrowserSession {
 			lastLogTs = Date.now()
 		}
 
-		const errorListener = (err: Error) => {
-			logs.push(`[Page Error] ${err.toString()}`)
+		const errorListener = (err: unknown) => {
+			const errorMessage = err instanceof Error ? err.toString() : String(err)
+			logs.push(`[Page Error] ${errorMessage}`)
 			lastLogTs = Date.now()
 		}
 
