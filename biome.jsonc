@@ -131,6 +131,7 @@
 			"!!**/node_modules",
 			"!!**/webview-ui/build",
 			"!!**/generated",
+			"!!cli/assets/ascii-motion-frames.json",
 			"!!**/proto",
 			"!!**/tests/specs"
 		]
